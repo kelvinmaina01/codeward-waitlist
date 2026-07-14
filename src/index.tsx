@@ -105,7 +105,7 @@ app.post('/api/join', async (c) => {
 export async function sendWaitlistEmail(env: any, email: string, name: string, nextPosition: number): Promise<boolean> {
   if (!env.RESEND_API_KEY) return false;
   try {
-    const positionStr = (118 + nextPosition).toLocaleString()
+    const positionStr = (BASE_COUNT + nextPosition).toLocaleString()
     const emailHtml = `<!DOCTYPE html>
 <html>
 <head>
@@ -292,6 +292,10 @@ export async function sendWaitlistEmail(env: any, email: string, name: string, n
         html: emailHtml
       })
     })
+    if (!res.ok) {
+      const errorText = await res.text()
+      console.error('Resend API Error:', res.status, errorText)
+    }
     return res.ok
   } catch (err) {
     console.error('Failed to send email', err)
