@@ -1,5 +1,6 @@
 import { Hono } from 'hono'
-import { basicAuth } from 'hono/basic-auth'
+import { getCookie, setCookie, deleteCookie } from 'hono/cookie'
+import { sendWaitlistEmail } from './index'
 
 type Bindings = {
   DB: D1Database
@@ -9,12 +10,167 @@ type Bindings = {
 
 const admin = new Hono<{ Bindings: Bindings }>()
 
-// ── Protect every /admin* route with HTTP Basic Auth ──
+// ── Session Middleware ──
 admin.use('*', async (c, next) => {
-  const username = c.env.ADMIN_USERNAME || 'admin'
-  const password = c.env.ADMIN_PASSWORD || 'changeme'
-  const auth = basicAuth({ username, password })
-  return auth(c, next)
+  const path = new URL(c.req.url).pathname
+  if (path === '/admin/login' || path.startsWith('/static/')) {
+    return next()
+  }
+  
+  const expectedSession = c.env.ADMIN_PASSWORD || 'paraKenya8#'
+  const session = getCookie(c, 'codeward_admin_session')
+  
+  if (session === expectedSession) {
+    return next()
+  }
+  
+  return c.redirect('/admin/login')
+})
+
+// ── Admin Login Page ──
+admin.get('/login', (c) => {
+  const html = /* html */ `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Admin Login — Codeward</title>
+<link rel="icon" type="image/gif" href="/static/images/logo.gif"/>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400..700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/admin.css"/>
+<style>
+  body {
+    background: #000;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    margin: 0;
+    font-family: 'DM Sans', sans-serif;
+  }
+  .login-card {
+    background: #09090b;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 24px;
+    padding: 48px;
+    width: 100%;
+    max-width: 400px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+  }
+  .login-header {
+    text-align: center;
+    margin-bottom: 32px;
+  }
+  .login-header img {
+    width: 48px;
+    border-radius: 50%;
+    margin-bottom: 16px;
+  }
+  .login-header h1 {
+    font-size: 24px;
+    margin: 0;
+    font-weight: 600;
+  }
+  .field {
+    margin-bottom: 20px;
+  }
+  .field label {
+    display: block;
+    margin-bottom: 8px;
+    color: #a1a1aa;
+    font-size: 14px;
+  }
+  .field input {
+    width: 100%;
+    background: #18181b;
+    border: 1px solid #27272a;
+    border-radius: 12px;
+    padding: 12px 16px;
+    color: #fff;
+    font-size: 16px;
+    box-sizing: border-box;
+    transition: border-color 0.2s;
+  }
+  .field input:focus {
+    outline: none;
+    border-color: #22c55e;
+  }
+  .login-btn {
+    width: 100%;
+    background: #fff;
+    color: #000;
+    border: none;
+    border-radius: 12px;
+    padding: 14px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s;
+    margin-top: 8px;
+  }
+  .login-btn:hover {
+    background: #f4f4f5;
+  }
+  .error-msg {
+    color: #ef4444;
+    font-size: 14px;
+    text-align: center;
+    margin-bottom: 16px;
+    display: none;
+  }
+  .error-msg.visible {
+    display: block;
+  }
+</style>
+</head>
+<body>
+  <div class="login-card">
+    <div class="login-header">
+      <img src="/static/images/logo.gif" alt="Codeward" />
+      <h1>Admin Login</h1>
+    </div>
+    <div class="error-msg ${c.req.query('error') ? 'visible' : ''}">Invalid username or password.</div>
+    <form method="post" action="/admin/login">
+      <div class="field">
+        <label>Username</label>
+        <input type="text" name="username" required autofocus />
+      </div>
+      <div class="field">
+        <label>Password</label>
+        <input type="password" name="password" required />
+      </div>
+      <button type="submit" class="login-btn">Sign in</button>
+    </form>
+  </div>
+</body>
+</html>`
+  return c.html(html)
+})
+
+admin.post('/login', async (c) => {
+  const body = await c.req.parseBody()
+  const expectedUser = c.env.ADMIN_USERNAME || 'kelvin.reallife8@gmail.com'
+  const expectedPass = c.env.ADMIN_PASSWORD || 'paraKenya8#'
+  
+  if (body.username === expectedUser && body.password === expectedPass) {
+    setCookie(c, 'codeward_admin_session', expectedPass, {
+      path: '/admin',
+      httpOnly: true,
+      secure: true,
+      maxAge: 60 * 60 * 24 * 7 // 1 week
+    })
+    return c.redirect('/admin')
+  }
+  
+  return c.redirect('/admin/login?error=1')
+})
+
+admin.get('/logout', (c) => {
+  deleteCookie(c, 'codeward_admin_session', { path: '/admin' })
+  return c.redirect('/admin/login')
 })
 
 type Entry = {
@@ -26,6 +182,7 @@ type Entry = {
   github: string | null
   position: number
   created_at: string
+  email_sent: number
 }
 
 const ROLE_LABELS: Record<string, string> = {
@@ -68,6 +225,14 @@ admin.get('/', async (c) => {
   const roleFilter = (url.searchParams.get('role') || '').trim()
   const page = Math.max(1, parseInt(url.searchParams.get('page') || '1', 10) || 1)
   const pageSize = 25
+  const msg = url.searchParams.get('msg') || ''
+
+  let alertHtml = ''
+  if (msg === 'retrigger_success') {
+    alertHtml = `<div style="background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); color: #10b981; padding: 12px 16px; border-radius: 8px; margin-bottom: 24px; font-weight: 500; display: flex; align-items: center; gap: 8px;"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"></path></svg> Email successfully resent!</div>`
+  } else if (msg === 'retrigger_failed') {
+    alertHtml = `<div style="background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); color: #ef4444; padding: 12px 16px; border-radius: 8px; margin-bottom: 24px; font-weight: 500; display: flex; align-items: center; gap: 8px;"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"></path></svg> Failed to resend email. Please check the logs.</div>`
+  }
 
   let where = 'WHERE 1=1'
   const params: any[] = []
@@ -91,7 +256,7 @@ admin.get('/', async (c) => {
   const offset = (safePage - 1) * pageSize
 
   const { results } = await env.DB.prepare(
-    `SELECT id, name, email, role, company, github, position, created_at
+    `SELECT id, name, email, role, company, github, position, created_at, email_sent, linkedin_clicked
      FROM waitlist_entries ${where}
      ORDER BY created_at DESC
      LIMIT ? OFFSET ?`
@@ -101,6 +266,15 @@ admin.get('/', async (c) => {
     `SELECT COUNT(*) as cnt FROM waitlist_entries`
   ).first<{ cnt: number }>()
   const allTotal = allTotalRow?.cnt ?? 0
+
+  const emailStats = await env.DB.prepare(
+    `SELECT 
+       SUM(CASE WHEN email_sent = 1 THEN 1 ELSE 0 END) as sent,
+       SUM(CASE WHEN email_sent = 0 THEN 1 ELSE 0 END) as failed
+     FROM waitlist_entries`
+  ).first<{ sent: number; failed: number }>()
+  const emailsSent = emailStats?.sent ?? 0
+  const emailsFailed = emailStats?.failed ?? 0
 
   const todayRow = await env.DB.prepare(
     `SELECT COUNT(*) as cnt FROM waitlist_entries WHERE date(created_at) = date('now')`
@@ -151,10 +325,28 @@ admin.get('/', async (c) => {
               : '<span class="muted">—</span>'
           }</td>
           <td class="date-cell">${dateStr}</td>
+          <td>
+            ${r.email_sent === 1 
+              ? '<span class="role-badge" style="background:#059669;color:#fff;">Sent</span>' 
+              : `<div style="display:flex;gap:8px;align-items:center;">
+                   <span class="role-badge" style="background:#dc2626;color:#fff;">Failed</span>
+                   <form method="post" action="/admin/retrigger" style="margin:0;">
+                     <input type="hidden" name="email" value="${escapeHtml(r.email)}" />
+                     <button type="submit" class="filter-btn" style="padding:2px 8px;font-size:11px;">Retrigger</button>
+                   </form>
+                 </div>`
+            }
+          </td>
+          <td>
+            ${r.linkedin_clicked === 1 
+              ? '<span class="role-badge" style="background:#0077b5;color:#fff;">Yes</span>'
+              : '<span class="role-badge" style="opacity:0.5;">No</span>'
+            }
+          </td>
         </tr>`
         })
         .join('')
-    : `<tr><td colspan="6" class="empty-row">No waitlist entries match your filters.</td></tr>`
+    : `<tr><td colspan="7" class="empty-row">No waitlist entries match your filters.</td></tr>`
 
   const roleBreakdownHtml = (roleBreakdown.results || [])
     .map((r) => {
@@ -204,17 +396,18 @@ admin.get('/', async (c) => {
       <span class="logo-text">ard</span>
       <span class="admin-tag">admin</span>
     </div>
-    <a href="/" class="back-link">&larr; View public page</a>
+    <div style="display: flex; gap: 16px; align-items: center;">
+      <a href="/" class="back-link">&larr; View public page</a>
+      <a href="/admin/logout" class="back-link" style="color: #ef4444;">Logout</a>
+    </div>
   </header>
 
-  <section class="stats-row">
+  ${alertHtml}
+
+  <section class="stats-row" style="grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));">
     <div class="stat-card">
       <span class="stat-num">${allTotal.toLocaleString()}</span>
       <span class="stat-label">total signups</span>
-    </div>
-    <div class="stat-card">
-      <span class="stat-num">${(616 + allTotal).toLocaleString()}</span>
-      <span class="stat-label">public waitlist count</span>
     </div>
     <div class="stat-card">
       <span class="stat-num accent">+${todayCount.toLocaleString()}</span>
@@ -223,6 +416,14 @@ admin.get('/', async (c) => {
     <div class="stat-card">
       <span class="stat-num">${withCompany.toLocaleString()}</span>
       <span class="stat-label">with company listed</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-num" style="color:#10b981;">${emailsSent.toLocaleString()}</span>
+      <span class="stat-label">emails sent</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-num" style="color:#ef4444;">${emailsFailed.toLocaleString()}</span>
+      <span class="stat-label">emails failed</span>
     </div>
   </section>
 
@@ -262,6 +463,8 @@ admin.get('/', async (c) => {
             <th>Company</th>
             <th>GitHub</th>
             <th>Joined</th>
+            <th>Email Status</th>
+            <th>LinkedIn?</th>
           </tr>
         </thead>
         <tbody>
@@ -328,7 +531,6 @@ admin.get('/export.csv', async (c) => {
       ].join(',')
     )
   }
-
   const csv = lines.join('\n')
   return new Response(csv, {
     headers: {
@@ -336,6 +538,29 @@ admin.get('/export.csv', async (c) => {
       'Content-Disposition': `attachment; filename="codeward-waitlist-${new Date().toISOString().slice(0, 10)}.csv"`,
     },
   })
+})
+
+admin.post('/retrigger', async (c) => {
+  const { env } = c
+  const body = await c.req.parseBody()
+  const email = (body.email || '').toString().trim()
+  if (!email) return c.redirect('/admin')
+
+  const entry = await env.DB.prepare(
+    `SELECT name, position FROM waitlist_entries WHERE email = ?`
+  ).bind(email).first<{ name: string; position: number }>()
+
+  if (entry) {
+    const success = await sendWaitlistEmail(env, email, entry.name, entry.position)
+    if (success) {
+      await env.DB.prepare(
+        `UPDATE waitlist_entries SET email_sent = 1 WHERE email = ?`
+      ).bind(email).run()
+      return c.redirect('/admin?msg=retrigger_success')
+    }
+  }
+
+  return c.redirect('/admin?msg=retrigger_failed')
 })
 
 export default admin

@@ -1,14 +1,14 @@
 (function () {
   'use strict';
 
-  var BASE_COUNT = 616;
+  var BASE_COUNT = 617;
 
   /* ============================================================
      SCROLL REVEAL ANIMATIONS (IntersectionObserver)
      ============================================================ */
   function initScrollReveal() {
     var targets = document.querySelectorAll(
-      '.reveal, .problem-card, .testimonial-card, .how-card'
+      '.reveal, .problem-item, .testimonial-item, .how-item'
     );
     if (!('IntersectionObserver' in window)) {
       targets.forEach(function (el) { el.classList.add('in-view'); });
@@ -112,6 +112,7 @@
      ============================================================ */
   var form = document.getElementById('waitlist-form');
   var submitBtn = document.getElementById('submit-btn');
+  var lastSubmittedEmail = '';
 
   function validateField(id, check) {
     var field = document.getElementById('field-' + id);
@@ -143,6 +144,7 @@
         company: document.getElementById('company').value.trim(),
         github: document.getElementById('github').value.trim(),
       };
+      lastSubmittedEmail = payload.email;
 
       submitBtn.disabled = true;
       submitBtn.innerHTML =
@@ -228,6 +230,19 @@
   document.addEventListener('keydown', function (e) {
     if (e.key === 'Escape') hideModal();
   });
+
+  var linkedinCta = document.getElementById('linkedin-cta');
+  if (linkedinCta) {
+    linkedinCta.addEventListener('click', function () {
+      if (lastSubmittedEmail) {
+        fetch('/api/track-linkedin', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: lastSubmittedEmail })
+        }).catch(function() {});
+      }
+    });
+  }
 
   function fireConfetti() {
     var wrap = document.getElementById('confetti-wrap');
