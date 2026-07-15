@@ -1,3 +1,7 @@
+if (typeof process !== 'undefined' && process.env) {
+  process.env.POSTGRES_URL = process.env.POSTGRES_URL || process.env.DATABASE_POSTGRES_URL || process.env.DATABASE_URL;
+}
+
 import { Hono } from 'hono'
 import { getCookie, setCookie, deleteCookie } from 'hono/cookie'
 import { sendWaitlistEmail } from './index'
