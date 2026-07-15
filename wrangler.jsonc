@@ -2,10 +2,7 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "codeward-waitlist",
   "compatibility_date": "2026-04-26",
-  "main": "dist/_worker.js",
-  "assets": {
-    "directory": "./dist"
-  },
+  "pages_build_output_dir": "./dist",
   "compatibility_flags": [
     "nodejs_compat"
   ],
