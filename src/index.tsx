@@ -1,10 +1,11 @@
 import { Hono } from 'hono'
 import admin from './admin'
 
+import { sql } from '@vercel/postgres'
+
 type Bindings = {
-  DB: D1Database
-  ADMIN_USERNAME: string
-  ADMIN_PASSWORD: string
+  ADMIN_USERNAME?: string
+  ADMIN_PASSWORD?: string
   RESEND_API_KEY?: string
 }
 
@@ -26,10 +27,8 @@ const BASE_COUNT = 617
 // ── API: get current waitlist stats ──
 app.get('/api/stats', async (c) => {
   const { env } = c
-  const row = await env.DB.prepare(
-    `SELECT COUNT(*) as cnt FROM waitlist_entries`
-  ).first<{ cnt: number }>()
-  const cnt = row?.cnt ?? 0
+  const { rows } = await sql`SELECT COUNT(*) as cnt FROM waitlist_entries`
+  const cnt = Number(rows[0]?.cnt ?? 0)
   return c.json({ count: BASE_COUNT + cnt })
 })
 
@@ -60,29 +59,24 @@ app.post('/api/join', async (c) => {
   }
 
   // Check if email already exists
-  const existing = await env.DB.prepare(
-    `SELECT id, position FROM waitlist_entries WHERE email = ?`
-  ).bind(email).first<{ id: number; position: number }>()
+  const { rows: existingRows } = await sql`SELECT id, position FROM waitlist_entries WHERE email = ${email}`
+  const existing = existingRows[0] as { id: number; position: number } | undefined
 
   if (existing) {
-    const countRow = await env.DB.prepare(
-      `SELECT COUNT(*) as cnt FROM waitlist_entries`
-    ).first<{ cnt: number }>()
+    const { rows: countRows1 } = await sql`SELECT COUNT(*) as cnt FROM waitlist_entries`
+    const countRow1 = countRows1[0]
     return c.json({
       alreadyJoined: true,
-      position: BASE_COUNT + existing.position,
-      total: BASE_COUNT + (countRow?.cnt ?? 0),
+      position: BASE_COUNT + Number(existing.position),
+      total: BASE_COUNT + Number(countRow1?.cnt ?? 0),
     })
   }
 
-  const countRow = await env.DB.prepare(
-    `SELECT COUNT(*) as cnt FROM waitlist_entries`
-  ).first<{ cnt: number }>()
-  const nextPosition = (countRow?.cnt ?? 0) + 1
+  const { rows: countRows2 } = await sql`SELECT COUNT(*) as cnt FROM waitlist_entries`
+  const countRow2 = countRows2[0]
+  const nextPosition = Number(countRow2?.cnt ?? 0) + 1
 
-  await env.DB.prepare(
-    `INSERT INTO waitlist_entries (name, email, role, company, github, position) VALUES (?, ?, ?, ?, ?, ?)`
-  ).bind(name, email, role, company || null, github || null, nextPosition).run()
+  await sql`INSERT INTO waitlist_entries (name, email, role, company, github, position) VALUES (${name}, ${email}, ${role}, ${company || null}, ${github || null}, ${nextPosition})`
 
   // ── Dispatch Follow-up Email ──
   let emailSent = 0
@@ -91,19 +85,18 @@ app.post('/api/join', async (c) => {
     if (success) emailSent = 1
   }
 
-  await env.DB.prepare(
-    `UPDATE waitlist_entries SET email_sent = ? WHERE email = ?`
-  ).bind(emailSent, email).run()
+  await sql`UPDATE waitlist_entries SET email_sent = ${emailSent} WHERE email = ${email}`
 
   return c.json({
     success: true,
     position: BASE_COUNT + nextPosition,
-    total: BASE_COUNT + (countRow?.cnt ?? 0) + 1,
+    total: BASE_COUNT + Number(countRow2?.cnt ?? 0) + 1,
   })
 })
 
 export async function sendWaitlistEmail(env: any, email: string, name: string, nextPosition: number): Promise<boolean> {
-  if (!env.RESEND_API_KEY) return false;
+  const apiKey = env.RESEND_API_KEY || process.env.RESEND_API_KEY;
+  if (!apiKey) return false;
   try {
     const positionStr = (BASE_COUNT + nextPosition).toLocaleString()
     const emailHtml = `<!DOCTYPE html>
@@ -282,7 +275,7 @@ export async function sendWaitlistEmail(env: any, email: string, name: string, n
     const res = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${env.RESEND_API_KEY}`,
+        'Authorization': `Bearer ${apiKey}`,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
@@ -314,9 +307,7 @@ app.post('/api/track-linkedin', async (c) => {
   }
   
   if (body.email) {
-    await env.DB.prepare(
-      `UPDATE waitlist_entries SET linkedin_clicked = 1 WHERE email = ?`
-    ).bind(body.email).run()
+    await sql`UPDATE waitlist_entries SET linkedin_clicked = 1 WHERE email = ${body.email}`
   }
   return c.json({ success: true })
 })

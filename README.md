@@ -13,7 +13,7 @@
   - 3 large "testimonial-style" cards showing real pain points from an engineer at Vercel and two African startup founders (Lagos, Nairobi)
   - "How it works" 4-step card grid
   - Waitlist form as the final section, but linked directly from a prominent hero CTA button so users can jump straight to it
-  - Server-validated join flow backed by **Cloudflare D1** (persistent, not in-memory)
+  - Server-validated join flow backed by **Vercel Postgres** (persistent, not in-memory)
   - Duplicate-email detection (returns existing queue position instead of erroring)
   - Success **popup modal** on submit: shows the user's exact queue position, a congratulations message, mentions the team is working hard for a safe launch + early-member benefits, plus a live "N engineers waiting" strip — all with a canvas-free CSS/Web-Animations **confetti burst**
   - Live stats endpoint keeps the "already joined" counter in sync with the real DB count
@@ -28,7 +28,7 @@
   - `name`, `email` (unique), `role`, `company` (optional), `github` (optional)
   - `position` — sequential position within this DB (added to a `BASE_COUNT` of 616 to look like a live, growing waitlist)
   - `created_at`
-- **Storage Service**: Cloudflare D1 (SQLite at the edge), binding name `DB`
+- **Storage Service**: Vercel Postgres
 - **Data Flow**:
   1. Frontend `POST /api/join` → Hono validates fields → checks for existing email → inserts row → returns `{ position, total }`
   2. Frontend `GET /api/stats` → returns live total count (`BASE_COUNT + rows`) used to keep counters accurate on page load
@@ -53,19 +53,16 @@
 4. Submitting the same email twice returns the same position instead of creating a duplicate row.
 
 ## Deployment
-- **Platform**: Cloudflare Pages (Hono + Vite + Wrangler)
-- **Status**: ❌ Not yet deployed to production — currently running locally in the sandbox via PM2 + `wrangler pages dev --local` with a local D1 SQLite database
-- **Tech Stack**: Hono (TypeScript, JSX-free — HTML returned via `c.html()`), Cloudflare D1, vanilla JS (no framework) + Web Animations API for confetti, DM Sans / JetBrains Mono via Google Fonts, Tailwind-free hand-written CSS with glassmorphism cards
-- **Local dev**:
-  ```bash
-  npm run build
-  pm2 start ecosystem.config.cjs
-  curl http://localhost:3000
-  ```
-- **To deploy to production**: create a production D1 database (`npx wrangler d1 create webapp-production`), put its `database_id` into `wrangler.jsonc`, run migrations against it, then `npm run build && npx wrangler pages deploy dist`.
+- **Platform**: Vercel (Hono + Vite + Vercel Edge/Serverless Functions)
+- **Status**: ❌ Not yet deployed to production — currently running locally in the sandbox via PM2 + `npm run dev` with Vercel Postgres
+- **Tech Stack**: Hono (TypeScript, JSX-free — HTML returned via `c.html()`), Vercel Postgres, vanilla JS (no framework) + Web Animations API for confetti, DM Sans / JetBrains Mono via Google Fonts, Tailwind-free hand-written CSS with glassmorphism cards
 
-## Not Yet Implemented / Next Steps
-- Production Cloudflare deployment (D1 database_id is currently a local placeholder)
+### Data Structure (Vercel Postgres)
+- Users: `id`, `name`, `email`, `role`, `company`, `github`, `position`, `created_at`
+
+### Production Deployment Notes
+- **To deploy to production**: Link your repository to Vercel, provision a Vercel Postgres database via the Storage tab, run the `schema.sql` queries, and Vercel will automatically build and deploy it using `vite build`.
+- Production Vercel deployment
 - Email notification integration (e.g. via Resend/SendGrid) when a user's access is ready
 - Admin view / export of waitlist entries
 - Rate limiting on `/api/join` to prevent spam submissions

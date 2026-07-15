@@ -2,10 +2,12 @@ import { Hono } from 'hono'
 import { getCookie, setCookie, deleteCookie } from 'hono/cookie'
 import { sendWaitlistEmail } from './index'
 
+import { db } from '@vercel/postgres'
+
 type Bindings = {
-  DB: D1Database
-  ADMIN_USERNAME: string
-  ADMIN_PASSWORD: string
+  ADMIN_USERNAME?: string
+  ADMIN_PASSWORD?: string
+  RESEND_API_KEY?: string
 }
 
 const admin = new Hono<{ Bindings: Bindings }>()
@@ -17,7 +19,7 @@ admin.use('*', async (c, next) => {
     return next()
   }
   
-  const expectedSession = c.env.ADMIN_PASSWORD || 'paraKenya8#'
+  const expectedSession = c.env.ADMIN_PASSWORD || process.env.ADMIN_PASSWORD || 'paraKenya8#'
   const session = getCookie(c, 'codeward_admin_session')
   
   if (session === expectedSession) {
@@ -152,8 +154,8 @@ admin.get('/login', (c) => {
 
 admin.post('/login', async (c) => {
   const body = await c.req.parseBody()
-  const expectedUser = c.env.ADMIN_USERNAME || 'kelvin.reallife8@gmail.com'
-  const expectedPass = c.env.ADMIN_PASSWORD || 'paraKenya8#'
+  const expectedUser = c.env.ADMIN_USERNAME || process.env.ADMIN_USERNAME || 'kelvin.reallife8@gmail.com'
+  const expectedPass = c.env.ADMIN_PASSWORD || process.env.ADMIN_PASSWORD || 'paraKenya8#'
   
   if (body.username === expectedUser && body.password === expectedPass) {
     setCookie(c, 'codeward_admin_session', expectedPass, {
@@ -236,61 +238,61 @@ admin.get('/', async (c) => {
 
   let where = 'WHERE 1=1'
   const params: any[] = []
+  let pIdx = 1
 
   if (search) {
-    where += ' AND (LOWER(name) LIKE ? OR LOWER(email) LIKE ? OR LOWER(company) LIKE ?)'
+    where += ` AND (LOWER(name) LIKE $${pIdx++} OR LOWER(email) LIKE $${pIdx++} OR LOWER(company) LIKE $${pIdx++})`
     const like = `%${search.toLowerCase()}%`
     params.push(like, like, like)
   }
   if (roleFilter) {
-    where += ' AND role = ?'
+    where += ` AND role = $${pIdx++}`
     params.push(roleFilter)
   }
 
-  const countRow = await env.DB.prepare(
-    `SELECT COUNT(*) as cnt FROM waitlist_entries ${where}`
-  ).bind(...params).first<{ cnt: number }>()
-  const totalMatching = countRow?.cnt ?? 0
+  const client = await db.connect()
+
+  const countRes = await client.query(`SELECT COUNT(*) as cnt FROM waitlist_entries ${where}`, params)
+  const totalMatching = Number(countRes.rows[0]?.cnt ?? 0)
   const totalPages = Math.max(1, Math.ceil(totalMatching / pageSize))
   const safePage = Math.min(page, totalPages)
   const offset = (safePage - 1) * pageSize
 
-  const { results } = await env.DB.prepare(
+  const listParams = [...params, pageSize, offset]
+  const listRes = await client.query(
     `SELECT id, name, email, role, company, github, position, created_at, email_sent, linkedin_clicked
      FROM waitlist_entries ${where}
      ORDER BY created_at DESC
-     LIMIT ? OFFSET ?`
-  ).bind(...params, pageSize, offset).all<Entry>()
+     LIMIT $${pIdx++} OFFSET $${pIdx++}`, listParams
+  )
+  const rows = (listRes.rows || []) as Entry[]
 
-  const allTotalRow = await env.DB.prepare(
-    `SELECT COUNT(*) as cnt FROM waitlist_entries`
-  ).first<{ cnt: number }>()
-  const allTotal = allTotalRow?.cnt ?? 0
+  const allTotalRes = await client.query(`SELECT COUNT(*) as cnt FROM waitlist_entries`)
+  const allTotal = Number(allTotalRes.rows[0]?.cnt ?? 0)
 
-  const emailStats = await env.DB.prepare(
+  const emailStatsRes = await client.query(
     `SELECT 
        SUM(CASE WHEN email_sent = 1 THEN 1 ELSE 0 END) as sent,
        SUM(CASE WHEN email_sent = 0 THEN 1 ELSE 0 END) as failed
      FROM waitlist_entries`
-  ).first<{ sent: number; failed: number }>()
-  const emailsSent = emailStats?.sent ?? 0
-  const emailsFailed = emailStats?.failed ?? 0
+  )
+  const emailsSent = Number(emailStatsRes.rows[0]?.sent ?? 0)
+  const emailsFailed = Number(emailStatsRes.rows[0]?.failed ?? 0)
 
-  const todayRow = await env.DB.prepare(
-    `SELECT COUNT(*) as cnt FROM waitlist_entries WHERE date(created_at) = date('now')`
-  ).first<{ cnt: number }>()
-  const todayCount = todayRow?.cnt ?? 0
+  const todayRes = await client.query(
+    `SELECT COUNT(*) as cnt FROM waitlist_entries WHERE created_at::DATE = CURRENT_DATE`
+  )
+  const todayCount = Number(todayRes.rows[0]?.cnt ?? 0)
 
-  const roleBreakdown = await env.DB.prepare(
+  const roleBreakdownRes = await client.query(
     `SELECT role, COUNT(*) as cnt FROM waitlist_entries GROUP BY role ORDER BY cnt DESC`
-  ).all<{ role: string; cnt: number }>()
+  )
+  const roleBreakdown = roleBreakdownRes.rows
 
-  const companyRow = await env.DB.prepare(
+  const companyRes = await client.query(
     `SELECT COUNT(*) as cnt FROM waitlist_entries WHERE company IS NOT NULL AND company != ''`
-  ).first<{ cnt: number }>()
-  const withCompany = companyRow?.cnt ?? 0
-
-  const rows = results || []
+  )
+  const withCompany = Number(companyRes.rows[0]?.cnt ?? 0)
 
   const roleOptions = Object.entries(ROLE_LABELS)
     .map(
@@ -348,14 +350,15 @@ admin.get('/', async (c) => {
         .join('')
     : `<tr><td colspan="7" class="empty-row">No waitlist entries match your filters.</td></tr>`
 
-  const roleBreakdownHtml = (roleBreakdown.results || [])
-    .map((r) => {
-      const pct = allTotal ? Math.round((r.cnt / allTotal) * 100) : 0
+  const roleBreakdownHtml = (roleBreakdown || [])
+    .map((r: any) => {
+      const cnt = Number(r.cnt)
+      const pct = allTotal ? Math.round((cnt / allTotal) * 100) : 0
       return `
       <div class="role-bar-row">
         <div class="role-bar-label">${escapeHtml(ROLE_LABELS[r.role] || r.role)}</div>
         <div class="role-bar-track"><div class="role-bar-fill" style="width:${pct}%"></div></div>
-        <div class="role-bar-count">${r.cnt}</div>
+        <div class="role-bar-count">${cnt}</div>
       </div>`
     })
     .join('')
@@ -499,23 +502,24 @@ admin.get('/export.csv', async (c) => {
 
   let where = 'WHERE 1=1'
   const params: any[] = []
+  let pIdx = 1
   if (search) {
-    where += ' AND (LOWER(name) LIKE ? OR LOWER(email) LIKE ? OR LOWER(company) LIKE ?)'
+    where += ` AND (LOWER(name) LIKE $${pIdx++} OR LOWER(email) LIKE $${pIdx++} OR LOWER(company) LIKE $${pIdx++})`
     const like = `%${search.toLowerCase()}%`
     params.push(like, like, like)
   }
   if (roleFilter) {
-    where += ' AND role = ?'
+    where += ` AND role = $${pIdx++}`
     params.push(roleFilter)
   }
 
-  const { results } = await env.DB.prepare(
+  const client = await db.connect()
+  const res = await client.query(
     `SELECT id, name, email, role, company, github, position, created_at
      FROM waitlist_entries ${where}
-     ORDER BY created_at ASC`
-  ).bind(...params).all<Entry>()
-
-  const rows = results || []
+     ORDER BY created_at ASC`, params
+  )
+  const rows = (res.rows || []) as Entry[]
   const header = ['Position', 'Name', 'Email', 'Role', 'Company', 'GitHub', 'Joined At (UTC)']
   const lines = [header.join(',')]
   for (const r of rows) {
@@ -546,16 +550,16 @@ admin.post('/retrigger', async (c) => {
   const email = (body.email || '').toString().trim()
   if (!email) return c.redirect('/admin')
 
-  const entry = await env.DB.prepare(
-    `SELECT name, position FROM waitlist_entries WHERE email = ?`
-  ).bind(email).first<{ name: string; position: number }>()
+  const client = await db.connect()
+  const res = await client.query(
+    `SELECT name, position FROM waitlist_entries WHERE email = $1`, [email]
+  )
+  const entry = res.rows[0] as { name: string; position: number } | undefined
 
   if (entry) {
     const success = await sendWaitlistEmail(env, email, entry.name, entry.position)
     if (success) {
-      await env.DB.prepare(
-        `UPDATE waitlist_entries SET email_sent = 1 WHERE email = ?`
-      ).bind(email).run()
+      await client.query(`UPDATE waitlist_entries SET email_sent = 1 WHERE email = $1`, [email])
       return c.redirect('/admin?msg=retrigger_success')
     }
   }
