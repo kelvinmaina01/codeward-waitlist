@@ -328,7 +328,7 @@ const HTML_PAGE = /* html */ `<!DOCTYPE html>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Codeward — Join the Waitlist</title>
 <meta name="description" content="Codeward runs your actual code inside an ephemeral sandbox — 120+ checks, 8 specialised agents, hard merge blocks on critical findings. Join the private beta waitlist."/>
-<link rel="icon" type="image/gif" href="/static/images/logo.gif">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚡</text></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;0,9..40,800;1,9..40,400&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -450,17 +450,17 @@ const HTML_PAGE = /* html */ `<!DOCTYPE html>
       <article class="testimonial-item reveal">
         <p class="testimonial-text">"Our review queue is the actual bottleneck on our release train now. I spend more time re-reviewing the same class of bugs — unhandled edge cases, silent failures in async code — than I spend writing my own PRs. We need something that runs the code, not just reads it."</p>
         <div class="testimonial-author">
-          <img src="/static/images/daniel.jpg" alt="Daniel Kessler" class="testimonial-avatar" />
+          <div class="testimonial-avatar fallback-avatar grad-1">DK</div>
           <div class="author-info">
             <div class="name">Daniel Kessler</div>
-            <div class="role">Software Engineer &middot; Vercel</div>
+            <div class="role">Software Engineer &middot; GenSpark AI</div>
           </div>
         </div>
       </article>
       <article class="testimonial-item reveal">
         <p class="testimonial-text">"We're a 6-person team in Lagos shipping fast for three different clients at once. There's no time for a dedicated QA pass, and honestly no budget for one either. Every bug that reaches a client demo costs us trust we can't easily rebuild. We're flying without a net."</p>
         <div class="testimonial-author">
-          <img src="/static/images/amara.jpg" alt="Amara Okafor" class="testimonial-avatar" />
+          <div class="testimonial-avatar fallback-avatar grad-2">AO</div>
           <div class="author-info">
             <div class="name">Amara Okafor</div>
             <div class="role">Co-founder &amp; Lead Engineer &middot; Lagos, Nigeria</div>
@@ -470,7 +470,7 @@ const HTML_PAGE = /* html */ `<!DOCTYPE html>
       <article class="testimonial-item reveal">
         <p class="testimonial-text">"Our seed round runway means every engineering hour has to count. I've caught myself shipping on Friday nights praying nothing breaks over the weekend. We're building an AI product and honestly have no idea if our prompt handling has security holes. We need eyes on this we can't afford to hire yet."</p>
         <div class="testimonial-author">
-          <img src="/static/images/tunde.jpg" alt="Tunde Martins" class="testimonial-avatar" />
+          <div class="testimonial-avatar fallback-avatar grad-3">TM</div>
           <div class="author-info">
             <div class="name">Tunde Martins</div>
             <div class="role">Founder &amp; CTO &middot; Nairobi, Kenya</div>
