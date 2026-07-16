@@ -455,7 +455,7 @@ const HTML_PAGE = /* html */ `<!DOCTYPE html>
       <article class="testimonial-item reveal">
         <p class="testimonial-text">"Our review queue is the actual bottleneck on our release train now. I spend more time re-reviewing the same class of bugs — unhandled edge cases, silent failures in async code — than I spend writing my own PRs. We need something that runs the code, not just reads it."</p>
         <div class="testimonial-author">
-          <div class="testimonial-avatar fallback-avatar grad-1">DK</div>
+          <img src="https://s13.gifyu.com/images/blLkq.png" class="testimonial-avatar" alt="Daniel" style="width: 48px; height: 48px; border-radius: 50%; object-fit: cover; flex-shrink: 0;" onerror="this.src='https://s13.gifyu.com/images/blLkq.jpg'" />
           <div class="author-info">
             <div class="name">Daniel Kessler</div>
             <div class="role">Software Engineer &middot; GenSpark AI</div>
@@ -465,7 +465,7 @@ const HTML_PAGE = /* html */ `<!DOCTYPE html>
       <article class="testimonial-item reveal">
         <p class="testimonial-text">"We're a 6-person team in Lagos shipping fast for three different clients at once. There's no time for a dedicated QA pass, and honestly no budget for one either. Every bug that reaches a client demo costs us trust we can't easily rebuild. We're flying without a net."</p>
         <div class="testimonial-author">
-          <div class="testimonial-avatar fallback-avatar grad-2">AO</div>
+          <img src="https://s13.gifyu.com/images/blLk7.png" class="testimonial-avatar" alt="Amara" style="width: 48px; height: 48px; border-radius: 50%; object-fit: cover; flex-shrink: 0;" onerror="this.src='https://s13.gifyu.com/images/blLk7.jpg'" />
           <div class="author-info">
             <div class="name">Amara Okafor</div>
             <div class="role">Co-founder &amp; Lead Engineer &middot; Lagos, Nigeria</div>
@@ -475,7 +475,7 @@ const HTML_PAGE = /* html */ `<!DOCTYPE html>
       <article class="testimonial-item reveal">
         <p class="testimonial-text">"Our seed round runway means every engineering hour has to count. I've caught myself shipping on Friday nights praying nothing breaks over the weekend. We're building an AI product and honestly have no idea if our prompt handling has security holes. We need eyes on this we can't afford to hire yet."</p>
         <div class="testimonial-author">
-          <div class="testimonial-avatar fallback-avatar grad-3">TM</div>
+          <img src="https://s13.gifyu.com/images/blLkI.png" class="testimonial-avatar" alt="Tunde" style="width: 48px; height: 48px; border-radius: 50%; object-fit: cover; flex-shrink: 0;" onerror="this.src='https://s13.gifyu.com/images/blLkI.jpg'" />
           <div class="author-info">
             <div class="name">Tunde Martins</div>
             <div class="role">Founder &amp; CTO &middot; Nairobi, Kenya</div>
