@@ -8,5 +8,10 @@ export default defineConfig({
     devServer({
       entry: 'src/index.tsx'
     })
-  ]
+  ],
+  build: {
+    rollupOptions: {
+      external: ['@vercel/postgres']
+    }
+  }
 })

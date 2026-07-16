@@ -24,6 +24,11 @@ function escapeHtml(str: string): string {
 
 const app = new Hono<{ Bindings: Bindings }>()
 
+app.onError((err, c) => {
+  console.error('Hono Global Error:', err)
+  return c.json({ error: err.message || 'Internal Server Error' }, 500)
+})
+
 app.route('/admin', admin)
 
 const BASE_COUNT = 617
