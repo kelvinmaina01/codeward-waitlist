@@ -6,7 +6,11 @@ import { Hono } from 'hono'
 import { getCookie, setCookie, deleteCookie } from 'hono/cookie'
 import { sendWaitlistEmail } from './index'
 
-import { db } from '@vercel/postgres'
+import { createPool } from '@vercel/postgres'
+
+const db = createPool({
+  connectionString: process.env.POSTGRES_URL || process.env.DATABASE_POSTGRES_URL || process.env.DATABASE_URL
+})
 
 type Bindings = {
   ADMIN_USERNAME?: string

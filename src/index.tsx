@@ -5,7 +5,12 @@ if (typeof process !== 'undefined' && process.env) {
 import { Hono } from 'hono'
 import admin from './admin'
 
-import { sql } from '@vercel/postgres'
+import { createPool } from '@vercel/postgres'
+
+const pool = createPool({
+  connectionString: process.env.POSTGRES_URL || process.env.DATABASE_POSTGRES_URL || process.env.DATABASE_URL
+})
+const sql = pool.sql
 
 type Bindings = {
   ADMIN_USERNAME?: string
