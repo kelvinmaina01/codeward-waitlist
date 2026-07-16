@@ -8,9 +8,16 @@ import { sendWaitlistEmail } from './index'
 
 import { createPool } from '@vercel/postgres'
 
-const db = createPool({
-  connectionString: process.env.POSTGRES_URL || process.env.DATABASE_POSTGRES_URL || process.env.DATABASE_URL
-})
+let _pool: ReturnType<typeof createPool> | null = null;
+function getDb(c?: any) {
+  if (!_pool) {
+    const connStr = 
+      (c?.env?.POSTGRES_URL || c?.env?.DATABASE_POSTGRES_URL || c?.env?.DATABASE_URL) ||
+      (typeof process !== 'undefined' && process.env ? (process.env.POSTGRES_URL || process.env.DATABASE_POSTGRES_URL || process.env.DATABASE_URL) : undefined);
+    _pool = createPool({ connectionString: connStr as string });
+  }
+  return _pool;
+}
 
 type Bindings = {
   ADMIN_USERNAME?: string
@@ -258,7 +265,7 @@ admin.get('/', async (c) => {
     params.push(roleFilter)
   }
 
-  const client = await db.connect()
+  const client = await getDb(c).connect()
 
   const countRes = await client.query(`SELECT COUNT(*) as cnt FROM waitlist_entries ${where}`, params)
   const totalMatching = Number(countRes.rows[0]?.cnt ?? 0)
@@ -521,7 +528,7 @@ admin.get('/export.csv', async (c) => {
     params.push(roleFilter)
   }
 
-  const client = await db.connect()
+  const client = await getDb(c).connect()
   const res = await client.query(
     `SELECT id, name, email, role, company, github, position, created_at
      FROM waitlist_entries ${where}
@@ -558,7 +565,7 @@ admin.post('/retrigger', async (c) => {
   const email = (body.email || '').toString().trim()
   if (!email) return c.redirect('/admin')
 
-  const client = await db.connect()
+  const client = await getDb(c).connect()
   const res = await client.query(
     `SELECT name, position FROM waitlist_entries WHERE email = $1`, [email]
   )

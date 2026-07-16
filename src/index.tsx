@@ -7,10 +7,19 @@ import admin from './admin'
 
 import { createPool } from '@vercel/postgres'
 
-const pool = createPool({
-  connectionString: process.env.POSTGRES_URL || process.env.DATABASE_POSTGRES_URL || process.env.DATABASE_URL
-})
-const sql = pool.sql
+let _pool: ReturnType<typeof createPool> | null = null;
+export function getDb(c?: any) {
+  if (!_pool) {
+    const connStr = 
+      (c?.env?.POSTGRES_URL || c?.env?.DATABASE_POSTGRES_URL || c?.env?.DATABASE_URL) ||
+      (typeof process !== 'undefined' && process.env ? (process.env.POSTGRES_URL || process.env.DATABASE_POSTGRES_URL || process.env.DATABASE_URL) : undefined);
+    _pool = createPool({ connectionString: connStr as string });
+  }
+  return _pool;
+}
+export function getSql(c?: any) {
+  return getDb(c).sql;
+}
 
 type Bindings = {
   ADMIN_USERNAME?: string
@@ -41,7 +50,7 @@ const BASE_COUNT = 617
 // ── API: get current waitlist stats ──
 app.get('/api/stats', async (c) => {
   const { env } = c
-  const { rows } = await sql`SELECT COUNT(*) as cnt FROM waitlist_entries`
+  const { rows } = await getSql(c)`SELECT COUNT(*) as cnt FROM waitlist_entries`
   const cnt = Number(rows[0]?.cnt ?? 0)
   return c.json({ count: BASE_COUNT + cnt })
 })
@@ -73,11 +82,11 @@ app.post('/api/join', async (c) => {
   }
 
   // Check if email already exists
-  const { rows: existingRows } = await sql`SELECT id, position FROM waitlist_entries WHERE email = ${email}`
+  const { rows: existingRows } = await getSql(c)`SELECT id, position FROM waitlist_entries WHERE email = ${email}`
   const existing = existingRows[0] as { id: number; position: number } | undefined
 
   if (existing) {
-    const { rows: countRows1 } = await sql`SELECT COUNT(*) as cnt FROM waitlist_entries`
+    const { rows: countRows1 } = await getSql(c)`SELECT COUNT(*) as cnt FROM waitlist_entries`
     const countRow1 = countRows1[0]
     return c.json({
       alreadyJoined: true,
@@ -86,11 +95,11 @@ app.post('/api/join', async (c) => {
     })
   }
 
-  const { rows: countRows2 } = await sql`SELECT COUNT(*) as cnt FROM waitlist_entries`
+  const { rows: countRows2 } = await getSql(c)`SELECT COUNT(*) as cnt FROM waitlist_entries`
   const countRow2 = countRows2[0]
   const nextPosition = Number(countRow2?.cnt ?? 0) + 1
 
-  await sql`INSERT INTO waitlist_entries (name, email, role, company, github, position) VALUES (${name}, ${email}, ${role}, ${company || null}, ${github || null}, ${nextPosition})`
+  await getSql(c)`INSERT INTO waitlist_entries (name, email, role, company, github, position) VALUES (${name}, ${email}, ${role}, ${company || null}, ${github || null}, ${nextPosition})`
 
   // ── Dispatch Follow-up Email ──
   let emailSent = 0
@@ -99,7 +108,7 @@ app.post('/api/join', async (c) => {
     if (success) emailSent = 1
   }
 
-  await sql`UPDATE waitlist_entries SET email_sent = ${emailSent} WHERE email = ${email}`
+  await getSql(c)`UPDATE waitlist_entries SET email_sent = ${emailSent} WHERE email = ${email}`
 
   return c.json({
     success: true,
