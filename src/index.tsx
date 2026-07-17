@@ -149,7 +149,8 @@ app.post('/api/join', async (c) => {
 
   // ── Dispatch Follow-up Email ──
   let emailSent = 0
-  if (env.RESEND_API_KEY) {
+  const resendKey = process.env.RESEND_API_KEY
+  if (resendKey) {
     const success = await sendWaitlistEmail(env, email, name, nextPosition)
     if (success) emailSent = 1
   }
