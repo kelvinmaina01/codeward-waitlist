@@ -9,9 +9,4 @@ export default defineConfig({
       entry: 'src/index.tsx'
     })
   ],
-  build: {
-    rollupOptions: {
-      external: ['@vercel/postgres']
-    }
-  }
 })
