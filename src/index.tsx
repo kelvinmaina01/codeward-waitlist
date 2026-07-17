@@ -19,8 +19,8 @@ function parseConnStr(connStr: string) {
 type SqlResult = { rows: Record<string, any>[]; rowCount: number };
 
 function createSql(connStr: string) {
-  const { host, user, password } = parseConnStr(connStr);
-  const auth = btoa(`${user}:${password}`);
+  const url = new URL(connStr);
+  const host = url.hostname;
   const endpoint = `https://${host}/sql`;
 
   return async function sql(strings: TemplateStringsArray, ...values: any[]): Promise<SqlResult> {
@@ -37,7 +37,7 @@ function createSql(connStr: string) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Basic ${auth}`,
+        'Neon-Connection-String': connStr,
       },
       body: JSON.stringify({ query, params }),
     });
