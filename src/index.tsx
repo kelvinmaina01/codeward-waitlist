@@ -7,13 +7,13 @@ import admin from './admin'
 
 import { neon } from '@neondatabase/serverless'
 
-let _sql: ReturnType<typeof neon> | null = null;
+let _sql: ReturnType<typeof neon<true>> | null = null;
 export function getSql(c?: any) {
   if (!_sql) {
     const connStr =
       (c?.env?.POSTGRES_URL || c?.env?.DATABASE_POSTGRES_URL || c?.env?.DATABASE_URL) ||
       (typeof process !== 'undefined' && process.env ? (process.env.POSTGRES_URL || process.env.DATABASE_POSTGRES_URL || process.env.DATABASE_URL) : undefined);
-    _sql = neon(connStr as string);
+    _sql = neon(connStr as string, { fullResults: true });
   }
   return _sql;
 }
