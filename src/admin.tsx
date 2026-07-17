@@ -6,17 +6,17 @@ import { Hono } from 'hono'
 import { getCookie, setCookie, deleteCookie } from 'hono/cookie'
 import { sendWaitlistEmail } from './index'
 
-import { createPool } from '@vercel/postgres'
+import { neon } from '@neondatabase/serverless'
 
-let _pool: ReturnType<typeof createPool> | null = null;
+let _sql: ReturnType<typeof neon> | null = null;
 function getDb(c?: any) {
-  if (!_pool) {
-    const connStr = 
+  if (!_sql) {
+    const connStr =
       (c?.env?.POSTGRES_URL || c?.env?.DATABASE_POSTGRES_URL || c?.env?.DATABASE_URL) ||
       (typeof process !== 'undefined' && process.env ? (process.env.POSTGRES_URL || process.env.DATABASE_POSTGRES_URL || process.env.DATABASE_URL) : undefined);
-    _pool = createPool({ connectionString: connStr as string });
+    _sql = neon(connStr as string);
   }
-  return _pool;
+  return _sql;
 }
 
 type Bindings = {

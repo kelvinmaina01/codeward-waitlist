@@ -5,20 +5,20 @@ if (typeof process !== 'undefined' && process.env) {
 import { Hono } from 'hono'
 import admin from './admin'
 
-import { createPool } from '@vercel/postgres'
+import { neon } from '@neondatabase/serverless'
 
-let _pool: ReturnType<typeof createPool> | null = null;
-export function getDb(c?: any) {
-  if (!_pool) {
-    const connStr = 
+let _sql: ReturnType<typeof neon> | null = null;
+export function getSql(c?: any) {
+  if (!_sql) {
+    const connStr =
       (c?.env?.POSTGRES_URL || c?.env?.DATABASE_POSTGRES_URL || c?.env?.DATABASE_URL) ||
       (typeof process !== 'undefined' && process.env ? (process.env.POSTGRES_URL || process.env.DATABASE_POSTGRES_URL || process.env.DATABASE_URL) : undefined);
-    _pool = createPool({ connectionString: connStr as string });
+    _sql = neon(connStr as string);
   }
-  return _pool;
+  return _sql;
 }
-export function getSql(c?: any) {
-  return getDb(c).sql;
+export function getDb(c?: any) {
+  return getSql(c);
 }
 
 type Bindings = {
