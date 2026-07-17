@@ -6,24 +6,33 @@ import { Hono } from 'hono'
 import admin from './admin'
 
 // ── Native Neon HTTP client — no npm packages, no bundling issues ──
-function parseConnStr(connStr: string) {
-  const url = new URL(connStr);
-  return {
-    host: url.hostname,
-    user: decodeURIComponent(url.username),
-    password: decodeURIComponent(url.password),
-    database: url.pathname.replace(/^\//, ''),
-  };
-}
-
-type SqlResult = { rows: Record<string, any>[]; rowCount: number };
+type QueryResult = { rows: Record<string, any>[]; rowCount: number };
 
 function createSql(connStr: string) {
   const url = new URL(connStr);
   const host = url.hostname;
   const endpoint = `https://${host}/sql`;
 
-  return async function sql(strings: TemplateStringsArray, ...values: any[]): Promise<SqlResult> {
+  // Core: raw query string + params array
+  async function rawQuery(queryStr: string, params: any[] = []): Promise<QueryResult> {
+    const res = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Neon-Connection-String': connStr,
+      },
+      body: JSON.stringify({ query: queryStr, params }),
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`DB error ${res.status}: ${text}`);
+    }
+    const data = await res.json() as any;
+    return { rows: data.rows ?? [], rowCount: data.rowCount ?? 0 };
+  }
+
+  // Tagged template literal interface: getSql(c)`SELECT ...`
+  async function sql(strings: TemplateStringsArray, ...values: any[]): Promise<QueryResult> {
     let query = '';
     const params: any[] = [];
     strings.forEach((str, i) => {
@@ -33,24 +42,21 @@ function createSql(connStr: string) {
         query += `$${params.length}`;
       }
     });
-    const res = await fetch(endpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Neon-Connection-String': connStr,
-      },
-      body: JSON.stringify({ query, params }),
-    });
-    if (!res.ok) {
-      const text = await res.text();
-      throw new Error(`DB error ${res.status}: ${text}`);
-    }
-    const data = await res.json() as any;
-    return { rows: data.rows ?? [], rowCount: data.rowCount ?? 0 };
-  };
+    return rawQuery(query, params);
+  }
+
+  // Pool-style interface: getDb(c).connect() → client.query(sql, params)
+  (sql as any).connect = async () => ({
+    query: rawQuery,
+    release: () => {},
+  });
+  (sql as any).query = rawQuery;
+
+  return sql;
 }
 
-let _sql: ((strings: TemplateStringsArray, ...values: any[]) => Promise<SqlResult>) | null = null;
+type SqlFn = typeof createSql extends (...args: any[]) => infer R ? R : never;
+let _sql: SqlFn | null = null;
 export function getSql(c?: any) {
   if (!_sql) {
     const connStr =
