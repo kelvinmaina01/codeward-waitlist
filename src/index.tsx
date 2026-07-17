@@ -5,15 +5,61 @@ if (typeof process !== 'undefined' && process.env) {
 import { Hono } from 'hono'
 import admin from './admin'
 
-import { neon } from '@neondatabase/serverless'
+// ── Native Neon HTTP client — no npm packages, no bundling issues ──
+function parseConnStr(connStr: string) {
+  const url = new URL(connStr);
+  return {
+    host: url.hostname,
+    user: decodeURIComponent(url.username),
+    password: decodeURIComponent(url.password),
+    database: url.pathname.replace(/^\//, ''),
+  };
+}
 
-let _sql: ReturnType<typeof neon<true>> | null = null;
+type SqlResult = { rows: Record<string, any>[]; rowCount: number };
+
+function createSql(connStr: string) {
+  const { host, user, password } = parseConnStr(connStr);
+  const auth = btoa(`${user}:${password}`);
+  const endpoint = `https://${host}/sql`;
+
+  return async function sql(strings: TemplateStringsArray, ...values: any[]): Promise<SqlResult> {
+    let query = '';
+    const params: any[] = [];
+    strings.forEach((str, i) => {
+      query += str;
+      if (i < values.length) {
+        params.push(values[i] === undefined ? null : values[i]);
+        query += `$${params.length}`;
+      }
+    });
+    const res = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Basic ${auth}`,
+      },
+      body: JSON.stringify({ query, params }),
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`DB error ${res.status}: ${text}`);
+    }
+    const data = await res.json() as any;
+    return { rows: data.rows ?? [], rowCount: data.rowCount ?? 0 };
+  };
+}
+
+let _sql: ((strings: TemplateStringsArray, ...values: any[]) => Promise<SqlResult>) | null = null;
 export function getSql(c?: any) {
   if (!_sql) {
     const connStr =
       (c?.env?.POSTGRES_URL || c?.env?.DATABASE_POSTGRES_URL || c?.env?.DATABASE_URL) ||
-      (typeof process !== 'undefined' && process.env ? (process.env.POSTGRES_URL || process.env.DATABASE_POSTGRES_URL || process.env.DATABASE_URL) : undefined);
-    _sql = neon(connStr as string, { fullResults: true });
+      (typeof process !== 'undefined' && process.env
+        ? (process.env.POSTGRES_URL || process.env.DATABASE_POSTGRES_URL || process.env.DATABASE_URL)
+        : undefined);
+    if (!connStr) throw new Error('No database connection string found in environment');
+    _sql = createSql(connStr);
   }
   return _sql;
 }

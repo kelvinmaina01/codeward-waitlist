@@ -6,17 +6,10 @@ import { Hono } from 'hono'
 import { getCookie, setCookie, deleteCookie } from 'hono/cookie'
 import { sendWaitlistEmail } from './index'
 
-import { neon } from '@neondatabase/serverless'
+import { getSql } from './index'
 
-let _sql: ReturnType<typeof neon> | null = null;
 function getDb(c?: any) {
-  if (!_sql) {
-    const connStr =
-      (c?.env?.POSTGRES_URL || c?.env?.DATABASE_POSTGRES_URL || c?.env?.DATABASE_URL) ||
-      (typeof process !== 'undefined' && process.env ? (process.env.POSTGRES_URL || process.env.DATABASE_POSTGRES_URL || process.env.DATABASE_URL) : undefined);
-    _sql = neon(connStr as string);
-  }
-  return _sql;
+  return getSql(c);
 }
 
 type Bindings = {
