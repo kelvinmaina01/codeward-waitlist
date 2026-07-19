@@ -517,36 +517,69 @@ const HTML_PAGE = /* html */ `<!DOCTYPE html>
 <title>Codeward — Ephemeral Sandbox Code Review & Automated PR Agents</title>
 <meta name="description" content="Codeward runs your actual code inside an ephemeral sandbox — 120+ checks, 11 specialised agents, and hard merge blocks on critical findings. Join the private beta waitlist."/>
 <meta name="keywords" content="automated code review, code review agents, ephemeral sandbox, pull request automated testing, security audit CI, codeward, continuous compliance, flaky test detection"/>
-<link rel="canonical" href="https://codeward.cloud/"/>
+<link rel="canonical" href="https://waitlist.codeward.cloud/"/>
 
 <!-- Open Graph / Facebook -->
 <meta property="og:type" content="website"/>
-<meta property="og:url" content="https://codeward.cloud/"/>
+<meta property="og:url" content="https://waitlist.codeward.cloud/"/>
 <meta property="og:title" content="Codeward — Ephemeral Sandbox Code Review & Automated PR Agents"/>
 <meta property="og:description" content="Codeward runs your actual code inside an ephemeral sandbox with 11 specialised agents. Catch security issues, memory leaks, and architectural debt before merge."/>
 <meta property="og:image" content="https://i.ibb.co/5HqfYFJ/object-remover-result-1784051501162.png"/>
 
 <!-- Twitter -->
 <meta name="twitter:card" content="summary_large_image"/>
-<meta name="twitter:url" content="https://codeward.cloud/"/>
+<meta name="twitter:url" content="https://waitlist.codeward.cloud/"/>
 <meta name="twitter:title" content="Codeward — Ephemeral Sandbox Code Review & Automated PR Agents"/>
 <meta name="twitter:description" content="Codeward runs your actual code inside an ephemeral sandbox with 11 specialised agents. Catch security issues, memory leaks, and architectural debt before merge."/>
 <meta name="twitter:image" content="https://i.ibb.co/5HqfYFJ/object-remover-result-1784051501162.png"/>
 
-<!-- Structured Data (JSON-LD) -->
+<!-- Structured Data (JSON-LD) for SEO & AEO -->
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
-  "@type": "SoftwareApplication",
-  "name": "Codeward",
-  "operatingSystem": "All",
-  "applicationCategory": "DeveloperApplication",
-  "description": "An autonomous code quality platform running code inside ephemeral sandboxes to perform deep security, architectural, and runtime checks before merge.",
-  "offers": {
-    "@type": "Offer",
-    "price": "0",
-    "priceCurrency": "USD"
-  }
+  "@graph": [
+    {
+      "@type": "SoftwareApplication",
+      "name": "Codeward",
+      "operatingSystem": "All",
+      "applicationCategory": "DeveloperApplication",
+      "description": "An autonomous code quality platform running code inside ephemeral sandboxes to perform deep security, architectural, and runtime checks before merge.",
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "USD"
+      }
+    },
+    {
+      "@type": "FAQPage",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "What is Codeward?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Codeward is an automated principal engineer that sits on every Pull Request. It runs your actual code inside an ephemeral sandbox with 11 specialized agents, executing 120+ checks including security, bloat, architecture, and AI-era compliance."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "How does Codeward review code?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "It analyzes code autonomously inside an ephemeral sandbox, looking for memory leaks, N+1 queries, prompt injections, and more, all under 6 minutes without requiring YAML configuration."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "How can I get early access to Codeward?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "You can request early access by joining the private beta waitlist at waitlist.codeward.cloud. Access is rolling out to a small group of teams at a time."
+          }
+        }
+      ]
+    }
+  ]
 }
 </script>
 
