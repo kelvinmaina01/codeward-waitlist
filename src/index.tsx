@@ -224,6 +224,11 @@ app.post('/api/join', async (c) => {
   if (resendKey) {
     const success = await sendWaitlistEmail(env, email, name, nextPosition)
     if (success) emailSent = 1
+    try {
+      await sendAdminNotificationEmail(env, name, email, role, company, github, BASE_COUNT + nextPosition)
+    } catch (e) {
+      console.error('Failed sending admin notification email:', e)
+    }
   }
 
   await getSql(c)`UPDATE waitlist_entries SET email_sent = ${emailSent} WHERE email = ${email}`
@@ -436,6 +441,52 @@ export async function sendWaitlistEmail(env: any, email: string, name: string, n
     return false
   }
 }
+
+export async function sendAdminNotificationEmail(
+  env: any,
+  name: string,
+  email: string,
+  role: string,
+  company: string,
+  github: string,
+  position: number
+): Promise<boolean> {
+  const apiKey = env.RESEND_API_KEY || process.env.RESEND_API_KEY;
+  if (!apiKey) return false;
+  try {
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        from: 'Codeward System <waitlist@codeward.cloud>',
+        to: ['kelvin.reallife8@gmail.com'],
+        subject: `New Waitlist Sign-up: ${name}`,
+        html: `
+          <h3>New Waitlist Sign-up Details</h3>
+          <p><strong>Name:</strong> ${escapeHtml(name)}</p>
+          <p><strong>Email:</strong> ${escapeHtml(email)}</p>
+          <p><strong>Role:</strong> ${escapeHtml(role)}</p>
+          <p><strong>Company:</strong> ${escapeHtml(company || 'None')}</p>
+          <p><strong>GitHub:</strong> ${escapeHtml(github || 'None')}</p>
+          <p><strong>Position:</strong> #${position}</p>
+        `
+      })
+    })
+    if (!res.ok) {
+      const errorText = await res.text()
+      console.error('Resend API Error (Admin Notification):', res.status, errorText)
+    }
+    return res.ok
+  } catch (err) {
+    console.error('Failed to send admin email', err)
+    return false
+  }
+}
+
+
 
 // ── API: track linkedin click ──
 app.post('/api/track-linkedin', async (c) => {
