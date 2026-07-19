@@ -773,8 +773,8 @@ const HTML_PAGE = /* html */ `<!DOCTYPE html>
                 <span class="field-error">Please enter your name.</span>
               </div>
               <div class="field" id="field-email">
-                <label>Work email <span class="required">required</span></label>
-                <input type="email" name="email" id="email" placeholder="tim@apple.com" autocomplete="email"/>
+                <label>Work or personal email <span class="required">required</span></label>
+                <input type="email" name="email" id="email" placeholder="you@company.com or you@gmail.com" autocomplete="email"/>
                 <span class="field-error">Enter a valid email address.</span>
               </div>
             </div>
