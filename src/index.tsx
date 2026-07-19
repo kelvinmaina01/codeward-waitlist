@@ -270,11 +270,11 @@ export async function sendWaitlistEmail(env: any, email: string, name: string, n
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
         <tr>
           <td width="72" valign="middle" style="text-align:left;">
-            <img src="https://s13.gifyu.com/images/blNeY.jpg" width="72" height="72"
-                 style="width:72px;height:72px;border-radius:50%;object-fit:cover;border:2px solid #7c6fff;display:inline-block;" alt="Maina, founder of Codeward">
+            <img src="https://i.ibb.co/QFJtchYr/kelvinimage.avif" width="72" height="72"
+                 style="width:72px;height:72px;border-radius:50%;object-fit:cover;border:2px solid #7c6fff;display:inline-block;" alt="Kelvin, founder of Codeward">
           </td>
           <td valign="middle" style="padding-left:14px;text-align:left;">
-            <p style="font-size:14px;font-weight:600;color:#ffffff;margin:0 0 2px;">Maina, from Codeward</p>
+            <p style="font-size:14px;font-weight:600;color:#ffffff;margin:0 0 2px;">Kelvin, from Codeward</p>
             <p style="font-size:12.5px;color:#5f6169;margin:0;">Founder</p>
           </td>
         </tr>
@@ -383,7 +383,7 @@ export async function sendWaitlistEmail(env: any, email: string, name: string, n
   <tr>
     <td style="padding:24px 32px 28px;text-align:left;">
       <p style="font-size:14px;line-height:22px;color:#c9d1d9;margin:0 0 4px;">Thanks for your patience — talk soon,</p>
-      <p style="font-family:'Poppins',sans-serif;font-size:14px;font-weight:600;color:#ffffff;margin:0;">Maina</p>
+      <p style="font-family:'Poppins',sans-serif;font-size:14px;font-weight:600;color:#ffffff;margin:0;">Kelvin</p>
       <p style="font-size:12.5px;color:#5f6169;margin:2px 0 0;">Founder, Codeward</p>
     </td>
   </tr>
