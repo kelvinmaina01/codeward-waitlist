@@ -587,7 +587,7 @@ const HTML_PAGE = /* html */ `<!DOCTYPE html>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;0,9..40,800;1,9..40,400&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/static/style.css?v=2"/>
+<link rel="stylesheet" href="/static/style.css?v=3"/>
 
 <!-- Vercel Web Analytics -->
 <script defer src="/_vercel/insights/script.js"></script>
@@ -782,7 +782,7 @@ const HTML_PAGE = /* html */ `<!DOCTYPE html>
   <div class="section-divider"></div>
 
   <!-- ============ LINKEDIN FOLLOW BANNER ============ -->
-  <section class="linkedin-banner reveal">
+  <section class="linkedin-banner">
     <div class="linkedin-banner-graphic" aria-hidden="true">
       <!-- Floating UI cards -->
       <div class="banner-card banner-card--1">
@@ -797,7 +797,10 @@ const HTML_PAGE = /* html */ `<!DOCTYPE html>
         <div class="bc-bar bc-bar--tall"></div>
       </div>
       <div class="banner-card banner-card--3">
-        <div class="bc-badge">⚡ New review</div>
+        <div class="bc-badge">
+          <svg viewBox="0 0 24 24" fill="currentColor" width="10" height="10"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+          New update
+        </div>
         <div class="bc-line"></div>
         <div class="bc-line bc-line--short"></div>
       </div>
@@ -950,7 +953,7 @@ const HTML_PAGE = /* html */ `<!DOCTYPE html>
   </div>
 </div>
 
-<script src="/static/app.js?v=2"></script>
+<script src="/static/app.js?v=3"></script>
 
 <!-- ============ TERMS DRAWER ============ -->
 <div class="drawer-overlay" id="terms-drawer-overlay"></div>
