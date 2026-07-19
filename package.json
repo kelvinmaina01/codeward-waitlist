@@ -6,6 +6,7 @@
     "build": "vite build"
   },
   "dependencies": {
+    "@vercel/analytics": "^2.0.1",
     "hono": "^4.12.27"
   },
   "devDependencies": {
