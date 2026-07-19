@@ -448,7 +448,7 @@ var kr=Object.defineProperty;var Ht=e=>{throw TypeError(e)};var Cr=(e,t,r)=>t in
           <p><strong>Company:</strong> ${Se(n||"None")}</p>
           <p><strong>GitHub:</strong> ${Se(a||"None")}</p>
           <p><strong>Position:</strong> #${i}</p>
-        `})});if(!p.ok){const o=await p.text();console.error("Resend API Error (Admin Notification):",p.status,o)}return p.ok}catch(p){return console.error("Failed to send admin email",p),!1}}ne.post("/api/track-linkedin",async e=>{const{env:t}=e;let r;try{r=await e.req.json()}catch{return e.json({error:"Invalid body"},400)}return r.email&&await sql`UPDATE waitlist_entries SET linkedin_clicked = 1 WHERE email = ${r.email}`,e.json({success:!0})});ne.get("/",e=>e.html(ws));const ws=`<!DOCTYPE html>
+        `})});if(!p.ok){const o=await p.text();console.error("Resend API Error (Admin Notification):",p.status,o)}return p.ok}catch(p){return console.error("Failed to send admin email",p),!1}}ne.post("/api/track-linkedin",async e=>{const{env:t}=e;let r;try{r=await e.req.json()}catch{return e.json({error:"Invalid body"},400)}return r.email&&await sql`UPDATE waitlist_entries SET linkedin_clicked = 1 WHERE email = ${r.email}`,e.json({success:!0})});ne.get("/",e=>(e.header("Cache-Control","no-store, no-cache, must-revalidate, proxy-revalidate"),e.header("Pragma","no-cache"),e.header("Expires","0"),e.html(ws)));const ws=`<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8"/>
@@ -526,7 +526,7 @@ var kr=Object.defineProperty;var Ht=e=>{throw TypeError(e)};var Cr=(e,t,r)=>t in
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;0,9..40,800;1,9..40,400&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/static/style.css?v=3"/>
+<link rel="stylesheet" href="/static/style.css?v=4"/>
 
 <!-- Vercel Web Analytics -->
 <script defer src="/_vercel/insights/script.js"><\/script>
@@ -892,7 +892,7 @@ var kr=Object.defineProperty;var Ht=e=>{throw TypeError(e)};var Cr=(e,t,r)=>t in
   </div>
 </div>
 
-<script src="/static/app.js?v=3"><\/script>
+<script src="/static/app.js?v=4"><\/script>
 
 <!-- ============ TERMS DRAWER ============ -->
 <div class="drawer-overlay" id="terms-drawer-overlay"></div>

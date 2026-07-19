@@ -506,6 +506,9 @@ app.post('/api/track-linkedin', async (c) => {
 
 // ── Main page ──
 app.get('/', (c) => {
+  c.header('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  c.header('Pragma', 'no-cache');
+  c.header('Expires', '0');
   return c.html(HTML_PAGE)
 })
 
@@ -587,7 +590,7 @@ const HTML_PAGE = /* html */ `<!DOCTYPE html>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;0,9..40,800;1,9..40,400&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/static/style.css?v=3"/>
+<link rel="stylesheet" href="/static/style.css?v=4"/>
 
 <!-- Vercel Web Analytics -->
 <script defer src="/_vercel/insights/script.js"></script>
@@ -953,7 +956,7 @@ const HTML_PAGE = /* html */ `<!DOCTYPE html>
   </div>
 </div>
 
-<script src="/static/app.js?v=3"></script>
+<script src="/static/app.js?v=4"></script>
 
 <!-- ============ TERMS DRAWER ============ -->
 <div class="drawer-overlay" id="terms-drawer-overlay"></div>
