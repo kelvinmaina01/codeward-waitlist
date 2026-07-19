@@ -1037,10 +1037,10 @@ body {
 
 /* ── TERMS CHECKBOX ── */
 .checkbox-field {
-  flex-direction: row !important;
-  align-items: flex-start;
-  gap: 12px !important;
-  margin-top: 8px;
+  flex-direction: column !important;
+  align-items: flex-start !important;
+  gap: 4px !important;
+  margin-top: 16px;
 }
 
 .checkbox-label {

@@ -526,7 +526,7 @@ var kr=Object.defineProperty;var Ht=e=>{throw TypeError(e)};var Cr=(e,t,r)=>t in
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;0,9..40,800;1,9..40,400&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/static/style.css"/>
+<link rel="stylesheet" href="/static/style.css?v=2"/>
 
 <!-- Vercel Web Analytics -->
 <script defer src="/_vercel/insights/script.js"><\/script>
@@ -889,7 +889,7 @@ var kr=Object.defineProperty;var Ht=e=>{throw TypeError(e)};var Cr=(e,t,r)=>t in
   </div>
 </div>
 
-<script src="/static/app.js"><\/script>
+<script src="/static/app.js?v=2"><\/script>
 
 <!-- ============ TERMS DRAWER ============ -->
 <div class="drawer-overlay" id="terms-drawer-overlay"></div>
@@ -900,12 +900,10 @@ var kr=Object.defineProperty;var Ht=e=>{throw TypeError(e)};var Cr=(e,t,r)=>t in
   </div>
   <div class="drawer-content">
     <h3>Data Privacy Guarantee</h3>
-    <p>Your privacy is our top priority. The code you run in the Codeward ephemeral sandbox is never used to train our AI models or shared with third parties.</p>
-    <p>We do not store your repository contents after the review is complete; the sandbox is completely destroyed within minutes of the run finishing.</p>
-    <h3>Data Collection</h3>
-    <p>We only collect the minimum required information (name, email, role, etc.) necessary to manage your waitlist position and send you the invitation email.</p>
-    <h3>Security</h3>
-    <p>All data transmitted to and from Codeward is encrypted in transit and at rest. You have the right to request deletion of your waitlist data at any time.</p>
+    <p>Your privacy is our top priority. We only collect the information provided in this form (name, email, role, etc.) to manage your waitlist position and notify you when Codeward is ready.</p>
+    <p>We do not sell your data, send you spam, or share your information with any third parties.</p>
+    <h3>Security & Control</h3>
+    <p>All waitlist data is encrypted in transit and at rest. You have full control over your data and can unsubscribe or request deletion of your information at any time.</p>
   </div>
 </div>
 
