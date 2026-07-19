@@ -108,6 +108,74 @@
   refreshStats();
 
   /* ============================================================
+     AVATAR STACK — Gravatar + initials fallback
+     ============================================================ */
+  var avatarStackEl = document.getElementById('avatar-stack');
+
+  function makeInitialsEl(initials, index) {
+    var av = document.createElement('div');
+    av.className = 'av';
+    av.style.zIndex = String(10 - index);
+    var inner = document.createElement('div');
+    inner.className = 'av-initials';
+    inner.textContent = initials || '?';
+    av.appendChild(inner);
+    return av;
+  }
+
+  function renderAvatars(avatars) {
+    if (!avatarStackEl || !avatars || !avatars.length) return;
+    avatarStackEl.innerHTML = '';
+
+    // Render in reverse so first signup appears on the right (leftmost in row-reverse)
+    var reversed = avatars.slice().reverse();
+
+    reversed.forEach(function (person, idx) {
+      var av = document.createElement('div');
+      av.className = 'av';
+      av.style.zIndex = String(idx + 1);
+
+      if (person.emailHash) {
+        // Try Gravatar — d=404 so we get a proper 404 if no Gravatar exists
+        var img = document.createElement('img');
+        img.src = 'https://www.gravatar.com/avatar/' + person.emailHash + '?s=76&d=404';
+        img.alt = '';
+        img.width = 38;
+        img.height = 38;
+
+        img.onerror = function () {
+          // Gravatar not found — swap to initials
+          av.innerHTML = '';
+          var inner = document.createElement('div');
+          inner.className = 'av-initials';
+          inner.textContent = person.initials || '?';
+          av.appendChild(inner);
+        };
+
+        av.appendChild(img);
+      } else {
+        var inner = document.createElement('div');
+        inner.className = 'av-initials';
+        inner.textContent = person.initials || '?';
+        av.appendChild(inner);
+      }
+
+      avatarStackEl.appendChild(av);
+    });
+  }
+
+  fetch('/api/avatars')
+    .then(function (r) { return r.json(); })
+    .then(function (data) {
+      if (data && Array.isArray(data.avatars)) {
+        renderAvatars(data.avatars);
+      }
+    })
+    .catch(function () { /* fail silently */ });
+
+
+
+  /* ============================================================
      FORM HANDLING
      ============================================================ */
   var form = document.getElementById('waitlist-form');
