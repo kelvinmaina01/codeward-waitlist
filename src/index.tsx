@@ -850,6 +850,14 @@ const HTML_PAGE = /* html */ `<!DOCTYPE html>
             </div>
           </div>
 
+          <div class="field checkbox-field" id="field-terms">
+            <label class="checkbox-label">
+              <input type="checkbox" name="terms" id="terms" required />
+              <span>I accept the <a href="#" id="open-terms-btn">Terms and Privacy Policy</a></span>
+            </label>
+            <span class="field-error">You must accept the terms to join.</span>
+          </div>
+
           <button type="submit" class="submit-btn" id="submit-btn">
             Request early access
           </button>
@@ -906,6 +914,25 @@ const HTML_PAGE = /* html */ `<!DOCTYPE html>
 </div>
 
 <script src="/static/app.js"></script>
+
+<!-- ============ TERMS DRAWER ============ -->
+<div class="drawer-overlay" id="terms-drawer-overlay"></div>
+<div class="drawer" id="terms-drawer">
+  <div class="drawer-header">
+    <h2>Terms and Privacy Policy</h2>
+    <button class="drawer-close" id="close-terms-btn" aria-label="Close">&times;</button>
+  </div>
+  <div class="drawer-content">
+    <h3>Data Privacy Guarantee</h3>
+    <p>Your privacy is our top priority. The code you run in the Codeward ephemeral sandbox is never used to train our AI models or shared with third parties.</p>
+    <p>We do not store your repository contents after the review is complete; the sandbox is completely destroyed within minutes of the run finishing.</p>
+    <h3>Data Collection</h3>
+    <p>We only collect the minimum required information (name, email, role, etc.) necessary to manage your waitlist position and send you the invitation email.</p>
+    <h3>Security</h3>
+    <p>All data transmitted to and from Codeward is encrypted in transit and at rest. You have the right to request deletion of your waitlist data at any time.</p>
+  </div>
+</div>
+
 </body>
 </html>`
 
