@@ -527,6 +527,9 @@ var kr=Object.defineProperty;var Ht=e=>{throw TypeError(e)};var Cr=(e,t,r)=>t in
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;0,9..40,800;1,9..40,400&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/static/style.css"/>
+
+<!-- Vercel Web Analytics -->
+<script defer src="/_vercel/insights/script.js"><\/script>
 </head>
 <body>
 
@@ -762,6 +765,9 @@ var kr=Object.defineProperty;var Ht=e=>{throw TypeError(e)};var Cr=(e,t,r)=>t in
                   <option value="cto-vp">CTO / VP of Engineering</option>
                   <option value="devops-platform">DevOps / Platform Engineer</option>
                   <option value="security-engineer">Security Engineer</option>
+                  <option value="data-engineer">Data Engineer</option>
+                  <option value="data-scientist-ml">Data Scientist / ML Engineer</option>
+                  <option value="data-analyst">Analytics Engineer / Data Analyst</option>
                   <option value="freelancer">Freelance Developer</option>
                   <option value="open-source">Open Source Contributor</option>
                   <option value="student">Student / Bootcamp</option>
