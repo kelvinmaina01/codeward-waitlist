@@ -514,8 +514,42 @@ const HTML_PAGE = /* html */ `<!DOCTYPE html>
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>Codeward — Join the Waitlist</title>
-<meta name="description" content="Codeward runs your actual code inside an ephemeral sandbox — 120+ checks, 8 specialised agents, hard merge blocks on critical findings. Join the private beta waitlist."/>
+<title>Codeward — Ephemeral Sandbox Code Review & Automated PR Agents</title>
+<meta name="description" content="Codeward runs your actual code inside an ephemeral sandbox — 120+ checks, 11 specialised agents, and hard merge blocks on critical findings. Join the private beta waitlist."/>
+<meta name="keywords" content="automated code review, code review agents, ephemeral sandbox, pull request automated testing, security audit CI, codeward, continuous compliance, flaky test detection"/>
+<link rel="canonical" href="https://codeward.cloud/"/>
+
+<!-- Open Graph / Facebook -->
+<meta property="og:type" content="website"/>
+<meta property="og:url" content="https://codeward.cloud/"/>
+<meta property="og:title" content="Codeward — Ephemeral Sandbox Code Review & Automated PR Agents"/>
+<meta property="og:description" content="Codeward runs your actual code inside an ephemeral sandbox with 11 specialised agents. Catch security issues, memory leaks, and architectural debt before merge."/>
+<meta property="og:image" content="https://i.ibb.co/5HqfYFJ/object-remover-result-1784051501162.png"/>
+
+<!-- Twitter -->
+<meta name="twitter:card" content="summary_large_image"/>
+<meta name="twitter:url" content="https://codeward.cloud/"/>
+<meta name="twitter:title" content="Codeward — Ephemeral Sandbox Code Review & Automated PR Agents"/>
+<meta name="twitter:description" content="Codeward runs your actual code inside an ephemeral sandbox with 11 specialised agents. Catch security issues, memory leaks, and architectural debt before merge."/>
+<meta name="twitter:image" content="https://i.ibb.co/5HqfYFJ/object-remover-result-1784051501162.png"/>
+
+<!-- Structured Data (JSON-LD) -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "Codeward",
+  "operatingSystem": "All",
+  "applicationCategory": "DeveloperApplication",
+  "description": "An autonomous code quality platform running code inside ephemeral sandboxes to perform deep security, architectural, and runtime checks before merge.",
+  "offers": {
+    "@type": "Offer",
+    "price": "0",
+    "priceCurrency": "USD"
+  }
+}
+</script>
+
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚡</text></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
