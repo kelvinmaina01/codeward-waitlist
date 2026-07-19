@@ -781,6 +781,43 @@ const HTML_PAGE = /* html */ `<!DOCTYPE html>
 
   <div class="section-divider"></div>
 
+  <!-- ============ LINKEDIN FOLLOW BANNER ============ -->
+  <section class="linkedin-banner reveal">
+    <div class="linkedin-banner-graphic" aria-hidden="true">
+      <!-- Floating UI cards -->
+      <div class="banner-card banner-card--1">
+        <div class="bc-dot bc-dot--green"></div>
+        <div class="bc-line"></div>
+        <div class="bc-line bc-line--short"></div>
+      </div>
+      <div class="banner-card banner-card--2">
+        <div class="bc-bar"></div>
+        <div class="bc-bar bc-bar--tall"></div>
+        <div class="bc-bar"></div>
+        <div class="bc-bar bc-bar--tall"></div>
+      </div>
+      <div class="banner-card banner-card--3">
+        <div class="bc-badge">⚡ New review</div>
+        <div class="bc-line"></div>
+        <div class="bc-line bc-line--short"></div>
+      </div>
+    </div>
+    <div class="linkedin-banner-body">
+      <h2 class="linkedin-banner-heading">Follow Us &amp; Spread the Word</h2>
+      <p class="linkedin-banner-sub">Stay in the loop — get early updates, launch stories, and engineering insights on LinkedIn.</p>
+    </div>
+    <div class="linkedin-banner-cta">
+      <a href="https://www.linkedin.com/company/get-codeward" target="_blank" rel="noopener noreferrer" class="linkedin-banner-btn">
+        <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20" aria-hidden="true">
+          <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 0 1-2.063-2.065 2.064 2.064 0 1 1 2.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
+        </svg>
+        LinkedIn
+      </a>
+    </div>
+  </section>
+
+  <div class="section-divider"></div>
+
   <!-- ============ FORM SECTION ============ -->
   <section class="form-section" id="join-form">
     <div class="form-container reveal" id="form-card">
