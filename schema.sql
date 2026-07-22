@@ -8,5 +8,7 @@ CREATE TABLE waitlist_entries (
   position INTEGER NOT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   email_sent INTEGER DEFAULT 0,
-  linkedin_clicked INTEGER DEFAULT 0
+  linkedin_clicked INTEGER DEFAULT 0,
+  status TEXT DEFAULT 'pending',
+  invited_at TIMESTAMP
 );

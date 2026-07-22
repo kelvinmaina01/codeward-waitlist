@@ -4,9 +4,7 @@ if (typeof process !== 'undefined' && process.env) {
 
 import { Hono } from 'hono'
 import { getCookie, setCookie, deleteCookie } from 'hono/cookie'
-import { sendWaitlistEmail } from './index'
-
-import { getSql } from './index'
+import { sendWaitlistEmail, getSql } from './index'
 
 function getDb(c?: any) {
   return getSql(c);
@@ -20,6 +18,20 @@ type Bindings = {
 
 const admin = new Hono<{ Bindings: Bindings }>()
 
+// ── Auto DB Schema Upgrade ──
+let dbMigrated = false;
+async function ensureSchemaUpgraded(c: any) {
+  if (dbMigrated) return;
+  try {
+    const client = await getDb(c).connect();
+    await client.query(`ALTER TABLE waitlist_entries ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'pending';`);
+    await client.query(`ALTER TABLE waitlist_entries ADD COLUMN IF NOT EXISTS invited_at TIMESTAMP;`);
+    dbMigrated = true;
+  } catch (e) {
+    console.error('Failed schema upgrade:', e);
+  }
+}
+
 // ── Session Middleware ──
 admin.use('*', async (c, next) => {
   const path = new URL(c.req.url).pathname
@@ -31,11 +43,88 @@ admin.use('*', async (c, next) => {
   const session = getCookie(c, 'codeward_admin_session')
   
   if (session === expectedSession) {
+    await ensureSchemaUpgraded(c);
     return next()
   }
   
   return c.redirect('/admin/login')
 })
+
+// ── Lead Priority Scoring Algorithm ──
+export function calculatePriorityScore(entry: { email: string; role: string; company?: string | null; github?: string | null }) {
+  let score = 0;
+  const emailDomain = (entry.email.split('@')[1] || '').toLowerCase();
+  const freeMail = ['gmail.com', 'yahoo.com', 'hotmail.com', 'outlook.com', 'icloud.com', 'proton.me', 'protonmail.com', 'aol.com', 'live.com', 'yandex.com', 'mail.com'];
+  
+  if (emailDomain && !freeMail.includes(emailDomain)) {
+    score += 35; // Corporate domain
+  }
+  
+  const seniorRoles = ['senior-engineer', 'engineering-lead', 'cto-vp', 'founder', 'security-engineer', 'devops-platform'];
+  if (seniorRoles.includes(entry.role)) {
+    score += 30;
+  }
+  
+  if (entry.github && entry.github.trim().length > 0) {
+    score += 20;
+  }
+  
+  if (entry.company && entry.company.trim().length > 0) {
+    score += 15;
+  }
+  
+  if (score >= 65) return { score, label: '🔥 High', class: 'priority-high', level: 'high' };
+  if (score >= 35) return { score, label: '⚡ Medium', class: 'priority-medium', level: 'medium' };
+  return { score, label: '🟢 Standard', class: 'priority-standard', level: 'standard' };
+}
+
+// ── Beta Invitation Email Dispatch ──
+export async function sendBetaInviteEmail(env: any, email: string, name: string, position: number): Promise<boolean> {
+  const apiKey = env.RESEND_API_KEY || (typeof process !== 'undefined' ? process.env?.RESEND_API_KEY : undefined);
+  if (!apiKey) return false;
+  try {
+    const inviteHtml = `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8" />
+<meta name="color-scheme" content="dark">
+</head>
+<body style="margin:0;padding:32px 16px;background:#000000;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,sans-serif;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;margin:0 auto;background:#0d1117;border:1px solid #22232a;border-radius:12px;overflow:hidden;">
+  <tr>
+    <td style="padding:32px 24px;text-align:center;">
+      <h1 style="color:#ffffff;font-size:24px;margin-bottom:12px;">Your Codeward Access is Ready! 🎉</h1>
+      <p style="color:#c9d1d9;font-size:15px;line-height:24px;margin-bottom:24px;">
+        Hi ${escapeHtml(name)}, your spot in the Codeward private beta is now active. Your repository sandboxes and 11 review agents are standing by.
+      </p>
+      <a href="https://app.codeward.cloud/onboarding?token=beta_access_${position}" style="display:inline-block;background:#22c55e;color:#000000;font-weight:600;font-size:15px;padding:14px 28px;border-radius:99px;text-decoration:none;">
+        Access Codeward Sandbox &rarr;
+      </a>
+    </td>
+  </tr>
+</table>
+</body>
+</html>`;
+
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        from: 'Codeward <founders@codeward.cloud>',
+        to: [email],
+        subject: '🎉 Your Codeward Early Access is Ready!',
+        html: inviteHtml
+      })
+    });
+    return res.ok;
+  } catch (err) {
+    console.error('Failed sending beta invite email:', err);
+    return false;
+  }
+}
 
 // ── Admin Login Page ──
 admin.get('/login', (c) => {
@@ -121,9 +210,7 @@ admin.get('/login', (c) => {
     transition: background 0.2s;
     margin-top: 8px;
   }
-  .login-btn:hover {
-    background: #f4f4f5;
-  }
+  .login-btn:hover { background: #f4f4f5; }
   .error-msg {
     color: #ef4444;
     font-size: 14px;
@@ -131,9 +218,7 @@ admin.get('/login', (c) => {
     margin-bottom: 16px;
     display: none;
   }
-  .error-msg.visible {
-    display: block;
-  }
+  .error-msg.visible { display: block; }
 </style>
 </head>
 <body>
@@ -193,6 +278,9 @@ type Entry = {
   position: number
   created_at: string
   email_sent: number
+  linkedin_clicked: number
+  status?: string | null
+  invited_at?: string | null
 }
 
 const ROLE_LABELS: Record<string, string> = {
@@ -210,7 +298,7 @@ const ROLE_LABELS: Record<string, string> = {
 }
 
 function escapeHtml(str: string): string {
-  return str
+  return (str || '')
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
@@ -227,21 +315,29 @@ function escapeCsv(str: string): string {
   return s
 }
 
-// ── Admin dashboard (HTML) ──
+// ── Admin Dashboard HTML Page ──
 admin.get('/', async (c) => {
   const { env } = c
   const url = new URL(c.req.url)
   const search = (url.searchParams.get('q') || '').trim()
   const roleFilter = (url.searchParams.get('role') || '').trim()
+  const priorityFilter = (url.searchParams.get('priority') || '').trim()
+  const statusFilter = (url.searchParams.get('status') || '').trim()
   const page = Math.max(1, parseInt(url.searchParams.get('page') || '1', 10) || 1)
   const pageSize = 25
   const msg = url.searchParams.get('msg') || ''
 
   let alertHtml = ''
   if (msg === 'retrigger_success') {
-    alertHtml = `<div style="background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); color: #10b981; padding: 12px 16px; border-radius: 8px; margin-bottom: 24px; font-weight: 500; display: flex; align-items: center; gap: 8px;"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"></path></svg> Email successfully resent!</div>`
-  } else if (msg === 'retrigger_failed') {
-    alertHtml = `<div style="background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); color: #ef4444; padding: 12px 16px; border-radius: 8px; margin-bottom: 24px; font-weight: 500; display: flex; align-items: center; gap: 8px;"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"></path></svg> Failed to resend email. Please check the logs.</div>`
+    alertHtml = `<div style="background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); color: #10b981; padding: 12px 16px; border-radius: 8px; font-weight: 500;">✓ Email successfully resent!</div>`
+  } else if (msg === 'invite_success') {
+    alertHtml = `<div style="background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.3); color: #60a5fa; padding: 12px 16px; border-radius: 8px; font-weight: 500;">🎉 Early access invitation sent successfully!</div>`
+  } else if (msg === 'add_lead_success') {
+    alertHtml = `<div style="background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); color: #10b981; padding: 12px 16px; border-radius: 8px; font-weight: 500;">✓ VIP Lead added to waitlist!</div>`
+  } else if (msg === 'bulk_success') {
+    alertHtml = `<div style="background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); color: #10b981; padding: 12px 16px; border-radius: 8px; font-weight: 500;">✓ Bulk action executed successfully!</div>`
+  } else if (msg === 'delete_success') {
+    alertHtml = `<div style="background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); color: #f87171; padding: 12px 16px; border-radius: 8px; font-weight: 500;">✓ Waitlist entry deleted.</div>`
   }
 
   let where = 'WHERE 1=1'
@@ -257,35 +353,48 @@ admin.get('/', async (c) => {
     where += ` AND role = $${pIdx++}`
     params.push(roleFilter)
   }
+  if (statusFilter) {
+    where += ` AND COALESCE(status, 'pending') = $${pIdx++}`
+    params.push(statusFilter)
+  }
 
   const client = await getDb(c).connect()
 
-  const countRes = await client.query(`SELECT COUNT(*) as cnt FROM waitlist_entries ${where}`, params)
-  const totalMatching = Number(countRes.rows[0]?.cnt ?? 0)
+  // Fetch all matching entries for priority filtering & pagination
+  const allListRes = await client.query(
+    `SELECT id, name, email, role, company, github, position, created_at, email_sent, linkedin_clicked, status, invited_at
+     FROM waitlist_entries ${where}
+     ORDER BY created_at DESC`, params
+  )
+  let allEntries = (allListRes.rows || []).map((r: any) => {
+    const priority = calculatePriorityScore(r);
+    return { ...r, priority };
+  })
+
+  if (priorityFilter) {
+    allEntries = allEntries.filter(e => e.priority.level === priorityFilter);
+  }
+
+  const totalMatching = allEntries.length;
   const totalPages = Math.max(1, Math.ceil(totalMatching / pageSize))
   const safePage = Math.min(page, totalPages)
   const offset = (safePage - 1) * pageSize
+  const pageEntries = allEntries.slice(offset, offset + pageSize)
 
-  const listParams = [...params, pageSize, offset]
-  const listRes = await client.query(
-    `SELECT id, name, email, role, company, github, position, created_at, email_sent, linkedin_clicked
-     FROM waitlist_entries ${where}
-     ORDER BY created_at DESC
-     LIMIT $${pIdx++} OFFSET $${pIdx++}`, listParams
-  )
-  const rows = (listRes.rows || []) as Entry[]
-
+  // Overall Statistics
   const allTotalRes = await client.query(`SELECT COUNT(*) as cnt FROM waitlist_entries`)
   const allTotal = Number(allTotalRes.rows[0]?.cnt ?? 0)
 
   const emailStatsRes = await client.query(
     `SELECT 
        SUM(CASE WHEN email_sent = 1 THEN 1 ELSE 0 END) as sent,
-       SUM(CASE WHEN email_sent = 0 THEN 1 ELSE 0 END) as failed
+       SUM(CASE WHEN email_sent = 0 THEN 1 ELSE 0 END) as failed,
+       SUM(CASE WHEN COALESCE(status, 'pending') = 'invited' THEN 1 ELSE 0 END) as invited
      FROM waitlist_entries`
   )
   const emailsSent = Number(emailStatsRes.rows[0]?.sent ?? 0)
   const emailsFailed = Number(emailStatsRes.rows[0]?.failed ?? 0)
+  const totalInvited = Number(emailStatsRes.rows[0]?.invited ?? 0)
 
   const todayRes = await client.query(
     `SELECT COUNT(*) as cnt FROM waitlist_entries WHERE created_at::DATE = CURRENT_DATE`
@@ -302,6 +411,51 @@ admin.get('/', async (c) => {
   )
   const withCompany = Number(companyRes.rows[0]?.cnt ?? 0)
 
+  // Top Corporate Domains Insight
+  const domainCounts: Record<string, number> = {};
+  const freeMailSet = new Set(['gmail.com', 'yahoo.com', 'hotmail.com', 'outlook.com', 'icloud.com', 'proton.me', 'protonmail.com', 'aol.com', 'live.com']);
+  let corporateCount = 0;
+
+  for (const e of allEntries) {
+    const domain = (e.email.split('@')[1] || '').toLowerCase();
+    if (domain) {
+      if (!freeMailSet.has(domain)) {
+        corporateCount++;
+        domainCounts[domain] = (domainCounts[domain] || 0) + 1;
+      }
+    }
+  }
+
+  const topDomains = Object.entries(domainCounts)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5);
+
+  // Daily Signups Bar Graph (Last 10 Days)
+  const dailyGraphRes = await client.query(
+    `SELECT DATE(created_at) as day, COUNT(*) as cnt
+     FROM waitlist_entries
+     GROUP BY DATE(created_at)
+     ORDER BY day DESC
+     LIMIT 10`
+  );
+  const dailyRows = (dailyGraphRes.rows || []).reverse();
+  const maxDaily = Math.max(1, ...dailyRows.map((r: any) => Number(r.cnt)));
+
+  const chartBarsHtml = dailyRows.map((r: any) => {
+    const cnt = Number(r.cnt);
+    const heightPct = Math.round((cnt / maxDaily) * 100);
+    const dateLabel = new Date(r.day).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    return `
+      <div class="chart-bar-col">
+        <div class="chart-bar-track">
+          <span class="chart-bar-value">${cnt}</span>
+          <div class="chart-bar-fill" style="height: ${Math.max(15, heightPct)}%;"></div>
+        </div>
+        <span class="chart-bar-label">${dateLabel}</span>
+      </div>
+    `;
+  }).join('');
+
   const roleOptions = Object.entries(ROLE_LABELS)
     .map(
       ([val, label]) =>
@@ -309,18 +463,23 @@ admin.get('/', async (c) => {
     )
     .join('')
 
-  const tableRows = rows.length
-    ? rows
+  const tableRows = pageEntries.length
+    ? pageEntries
         .map((r) => {
           const date = new Date(r.created_at + 'Z')
           const dateStr = isNaN(date.getTime())
             ? r.created_at
-            : date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) +
+            : date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) +
               ' · ' +
               date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+          
+          const isInvited = r.status === 'invited';
+
           return `
         <tr>
+          <td><input type="checkbox" class="entry-checkbox" name="ids" value="${r.id}"/></td>
           <td class="pos-cell">#${616 + r.position}</td>
+          <td><span class="priority-badge ${r.priority.class}">${r.priority.label} (${r.priority.score})</span></td>
           <td>
             <div class="name-cell">${escapeHtml(r.name)}</div>
             <div class="email-cell">${escapeHtml(r.email)}</div>
@@ -336,27 +495,31 @@ admin.get('/', async (c) => {
           }</td>
           <td class="date-cell">${dateStr}</td>
           <td>
-            ${r.email_sent === 1 
-              ? '<span class="role-badge" style="background:#059669;color:#fff;">Sent</span>' 
-              : `<div style="display:flex;gap:8px;align-items:center;">
-                   <span class="role-badge" style="background:#dc2626;color:#fff;">Failed</span>
-                   <form method="post" action="/admin/retrigger" style="margin:0;">
-                     <input type="hidden" name="email" value="${escapeHtml(r.email)}" />
-                     <button type="submit" class="filter-btn" style="padding:2px 8px;font-size:11px;">Retrigger</button>
-                   </form>
-                 </div>`
+            ${isInvited
+              ? '<span class="status-badge status-invited">Beta Invited</span>'
+              : '<span class="status-badge status-pending">In Queue</span>'
             }
           </td>
           <td>
-            ${r.linkedin_clicked === 1 
-              ? '<span class="role-badge" style="background:#0077b5;color:#fff;">Yes</span>'
-              : '<span class="role-badge" style="opacity:0.5;">No</span>'
-            }
+            <div style="display:flex;gap:6px;align-items:center;">
+              <form method="post" action="/admin/invite" style="margin:0;">
+                <input type="hidden" name="email" value="${escapeHtml(r.email)}" />
+                <button type="submit" class="action-btn invite-btn">${isInvited ? 'Re-invite' : 'Invite'}</button>
+              </form>
+              <form method="post" action="/admin/retrigger" style="margin:0;">
+                <input type="hidden" name="email" value="${escapeHtml(r.email)}" />
+                <button type="submit" class="action-btn">Resend Waitlist</button>
+              </form>
+              <form method="post" action="/admin/delete" style="margin:0;" onsubmit="return confirm('Delete ${escapeHtml(r.name)} from waitlist?');">
+                <input type="hidden" name="id" value="${r.id}" />
+                <button type="submit" class="action-btn danger-btn">&times;</button>
+              </form>
+            </div>
           </td>
         </tr>`
         })
         .join('')
-    : `<tr><td colspan="7" class="empty-row">No waitlist entries match your filters.</td></tr>`
+    : `<tr><td colspan="10" class="empty-row">No waitlist entries match your filters.</td></tr>`
 
   const roleBreakdownHtml = (roleBreakdown || [])
     .map((r: any) => {
@@ -375,17 +538,22 @@ admin.get('/', async (c) => {
     const p = new URLSearchParams()
     if (search) p.set('q', search)
     if (roleFilter) p.set('role', roleFilter)
+    if (priorityFilter) p.set('priority', priorityFilter)
+    if (statusFilter) p.set('status', statusFilter)
     p.set('page', String(safePage))
     Object.entries(overrides).forEach(([k, v]) => p.set(k, String(v)))
     return '?' + p.toString()
   }
+
+  const resendApiKey = env?.RESEND_API_KEY || (typeof process !== 'undefined' ? process.env?.RESEND_API_KEY : undefined);
+  const deliveryRatePct = allTotal ? Math.round((emailsSent / allTotal) * 100) : 100;
 
   const html = /* html */ `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>Codeward Admin — Waitlist</title>
+<title>Codeward Admin — Waitlist Control</title>
 <link rel="icon" type="image/svg+xml" href="/static/favicon.svg"/>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -407,15 +575,34 @@ admin.get('/', async (c) => {
       <span class="logo-text">ard</span>
       <span class="admin-tag">admin</span>
     </div>
-    <div style="display: flex; gap: 16px; align-items: center;">
-      <a href="/" class="back-link">&larr; View public page</a>
+    <div style="display: flex; gap: 12px; align-items: center;">
+      <button class="action-btn invite-btn" onclick="document.getElementById('vip-modal').classList.add('active')">+ Add VIP Lead</button>
+      <a href="/" class="back-link">&larr; Public site</a>
       <a href="/admin/logout" class="back-link" style="color: #ef4444;">Logout</a>
     </div>
   </header>
 
+  <!-- ── SYSTEM HEALTH BAR ── -->
+  <div class="health-bar">
+    <div class="health-item">
+      <div class="health-dot"></div>
+      <span>Neon PostgreSQL: <strong>Connected</strong></span>
+    </div>
+    <div class="health-item">
+      <div class="health-dot ${resendApiKey ? '' : 'red'}"></div>
+      <span>Resend API: <strong>${resendApiKey ? 'Active' : 'Missing API Key'}</strong></span>
+    </div>
+    <div class="health-item">
+      <span>Delivery Rate: <strong>${deliveryRatePct}%</strong></span>
+    </div>
+    <div class="health-item">
+      <span>Corporate Leads: <strong>${corporateCount}</strong></span>
+    </div>
+  </div>
+
   ${alertHtml}
 
-  <section class="stats-row" style="grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));">
+  <section class="stats-row">
     <div class="stat-card">
       <span class="stat-num">${allTotal.toLocaleString()}</span>
       <span class="stat-label">total signups</span>
@@ -425,19 +612,41 @@ admin.get('/', async (c) => {
       <span class="stat-label">joined today</span>
     </div>
     <div class="stat-card">
-      <span class="stat-num">${withCompany.toLocaleString()}</span>
-      <span class="stat-label">with company listed</span>
+      <span class="stat-num" style="color:#3b82f6;">${totalInvited.toLocaleString()}</span>
+      <span class="stat-label">invited to beta</span>
     </div>
     <div class="stat-card">
       <span class="stat-num" style="color:#10b981;">${emailsSent.toLocaleString()}</span>
       <span class="stat-label">emails sent</span>
     </div>
-    <div class="stat-card">
-      <span class="stat-num" style="color:#ef4444;">${emailsFailed.toLocaleString()}</span>
-      <span class="stat-label">emails failed</span>
-    </div>
   </section>
 
+  <!-- ── ANALYTICS GRID ── -->
+  <div class="analytics-grid">
+    <section class="panel chart-card">
+      <h2 class="panel-title">Daily Signup Trend (Last 10 Days)</h2>
+      <div class="chart-container">
+        ${chartBarsHtml || '<p class="muted">No recent signups.</p>'}
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2 class="panel-title">Top Corporate Domains</h2>
+      <div class="domain-list">
+        ${topDomains.length
+          ? topDomains.map(([dom, cnt]) => `
+            <div class="domain-item">
+              <span class="domain-name">@${escapeHtml(dom)}</span>
+              <span class="domain-count">${cnt} lead${cnt > 1 ? 's' : ''}</span>
+            </div>
+          `).join('')
+          : '<p class="muted" style="font-size:13px;">No corporate domains yet.</p>'
+        }
+      </div>
+    </section>
+  </div>
+
+  <!-- ── ROLE BREAKDOWN PANEL ── -->
   <section class="panel role-breakdown-panel">
     <h2 class="panel-title">Role breakdown</h2>
     <div class="role-bars">
@@ -445,47 +654,78 @@ admin.get('/', async (c) => {
     </div>
   </section>
 
+  <!-- ── MAIN WAITLIST TABLE PANEL ── -->
   <section class="panel">
     <div class="panel-toolbar">
-      <h2 class="panel-title">Waitlist entries</h2>
-      <a class="export-btn" href="/admin/export.csv${search || roleFilter ? qs({}) : ''}">
-        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
-        Export CSV
-      </a>
+      <h2 class="panel-title">Waitlist entries (${totalMatching.toLocaleString()})</h2>
+      <div style="display:flex;gap:10px;">
+        <a class="export-btn" href="/admin/export.csv${qs({})}">
+          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+          Export CSV
+        </a>
+      </div>
     </div>
 
+    <!-- Filter Bar -->
     <form class="filter-bar" method="get" action="/admin">
       <input type="text" name="q" placeholder="Search name, email, or company…" value="${escapeHtml(search)}" class="search-input"/>
+      
       <select name="role" class="role-select">
         <option value="">All roles</option>
         ${roleOptions}
       </select>
+
+      <select name="priority" class="role-select">
+        <option value="">All priorities</option>
+        <option value="high" ${priorityFilter === 'high' ? 'selected' : ''}>🔥 High Priority (VIP)</option>
+        <option value="medium" ${priorityFilter === 'medium' ? 'selected' : ''}>⚡ Medium Priority</option>
+        <option value="standard" ${priorityFilter === 'standard' ? 'selected' : ''}>🟢 Standard</option>
+      </select>
+
+      <select name="status" class="role-select">
+        <option value="">All statuses</option>
+        <option value="pending" ${statusFilter === 'pending' ? 'selected' : ''}>In Queue</option>
+        <option value="invited" ${statusFilter === 'invited' ? 'selected' : ''}>Beta Invited</option>
+      </select>
+
       <button type="submit" class="filter-btn">Filter</button>
-      ${search || roleFilter ? '<a href="/admin" class="clear-btn">Clear</a>' : ''}
+      ${search || roleFilter || priorityFilter || statusFilter ? '<a href="/admin" class="clear-btn">Clear</a>' : ''}
     </form>
 
-    <div class="table-wrap">
-      <table class="entries-table">
-        <thead>
-          <tr>
-            <th>Position</th>
-            <th>Name / Email</th>
-            <th>Role</th>
-            <th>Company</th>
-            <th>GitHub</th>
-            <th>Joined</th>
-            <th>Email Status</th>
-            <th>LinkedIn?</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${tableRows}
-        </tbody>
-      </table>
-    </div>
+    <!-- Bulk Action Toolbar -->
+    <form id="bulk-form" method="post" action="/admin/bulk-action">
+      <div class="bulk-toolbar" id="bulk-bar" style="display:none;">
+        <span class="bulk-count" id="bulk-count-text">0 selected</span>
+        <button type="submit" name="action" value="invite" class="action-btn invite-btn">Bulk Invite to Beta</button>
+        <button type="submit" name="action" value="retrigger" class="action-btn">Bulk Resend Email</button>
+        <button type="submit" name="action" value="delete" class="action-btn danger-btn" onclick="return confirm('Delete selected entries?');">Bulk Delete</button>
+      </div>
+
+      <div class="table-wrap">
+        <table class="entries-table">
+          <thead>
+            <tr>
+              <th width="30"><input type="checkbox" id="select-all"/></th>
+              <th>Pos</th>
+              <th>Score</th>
+              <th>Name / Email</th>
+              <th>Role</th>
+              <th>Company</th>
+              <th>GitHub</th>
+              <th>Joined</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${tableRows}
+          </tbody>
+        </table>
+      </div>
+    </form>
 
     <div class="pagination">
-      <span class="page-info">Showing ${rows.length ? offset + 1 : 0}–${offset + rows.length} of ${totalMatching.toLocaleString()}</span>
+      <span class="page-info">Showing ${pageEntries.length ? offset + 1 : 0}–${offset + pageEntries.length} of ${totalMatching.toLocaleString()}</span>
       <div class="page-buttons">
         <a href="/admin${qs({ page: Math.max(1, safePage - 1) })}" class="page-btn ${safePage <= 1 ? 'disabled' : ''}">&larr; Prev</a>
         <span class="page-current">Page ${safePage} of ${totalPages}</span>
@@ -495,10 +735,183 @@ admin.get('/', async (c) => {
   </section>
 
 </div>
+
+<!-- ── ADD VIP LEAD MODAL ── -->
+<div class="admin-modal-overlay" id="vip-modal">
+  <div class="admin-modal">
+    <div class="admin-modal-header">
+      <h3>Add VIP Waitlist Lead</h3>
+      <button class="admin-modal-close" onclick="document.getElementById('vip-modal').classList.remove('active')">&times;</button>
+    </div>
+    <form class="modal-form" method="post" action="/admin/add-lead">
+      <div class="modal-field">
+        <label>Full Name</label>
+        <input type="text" name="name" placeholder="e.g. Elon Musk" required />
+      </div>
+      <div class="modal-field">
+        <label>Email Address</label>
+        <input type="email" name="email" placeholder="e.g. elon@x.com" required />
+      </div>
+      <div class="modal-field">
+        <label>Role</label>
+        <select name="role" required>
+          <option value="cto-vp">CTO / VP of Engineering</option>
+          <option value="founder" selected>Founder / Indie Hacker</option>
+          <option value="engineering-lead">Engineering Lead / Manager</option>
+          <option value="senior-engineer">Senior / Staff Engineer</option>
+          <option value="software-engineer">Software Engineer</option>
+        </select>
+      </div>
+      <div class="modal-field">
+        <label>Company</label>
+        <input type="text" name="company" placeholder="e.g. xAI, Tesla" />
+      </div>
+      <div class="modal-field">
+        <label>GitHub Profile</label>
+        <input type="text" name="github" placeholder="https://github.com/elonmusk" />
+      </div>
+      <div style="display:flex;gap:10px;margin-top:12px;">
+        <button type="submit" class="filter-btn" style="flex:1;">Add Lead &rarr;</button>
+        <button type="button" class="clear-btn" onclick="document.getElementById('vip-modal').classList.remove('active')">Cancel</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+  // Bulk selection handling
+  const selectAll = document.getElementById('select-all');
+  const checkboxes = document.querySelectorAll('.entry-checkbox');
+  const bulkBar = document.getElementById('bulk-bar');
+  const bulkText = document.getElementById('bulk-count-text');
+
+  function updateBulkBar() {
+    const checked = document.querySelectorAll('.entry-checkbox:checked');
+    if (checked.length > 0) {
+      bulkBar.style.display = 'flex';
+      bulkText.textContent = checked.length + ' selected';
+    } else {
+      bulkBar.style.display = 'none';
+    }
+  }
+
+  if (selectAll) {
+    selectAll.addEventListener('change', () => {
+      checkboxes.forEach(cb => cb.checked = selectAll.checked);
+      updateBulkBar();
+    });
+  }
+
+  checkboxes.forEach(cb => {
+    cb.addEventListener('change', updateBulkBar);
+  });
+</script>
+
 </body>
 </html>`
 
   return c.html(html)
+})
+
+// ── Single Invite Action ──
+admin.post('/invite', async (c) => {
+  const { env } = c
+  const body = await c.req.parseBody()
+  const email = (body.email || '').toString().trim()
+  if (!email) return c.redirect('/admin')
+
+  const client = await getDb(c).connect()
+  const res = await client.query(`SELECT name, position FROM waitlist_entries WHERE email = $1`, [email])
+  const entry = res.rows[0] as { name: string; position: number } | undefined
+
+  if (entry) {
+    const success = await sendBetaInviteEmail(env, email, entry.name, entry.position)
+    if (success) {
+      await client.query(`UPDATE waitlist_entries SET status = 'invited', invited_at = CURRENT_TIMESTAMP WHERE email = $1`, [email])
+      return c.redirect('/admin?msg=invite_success')
+    }
+  }
+  return c.redirect('/admin?msg=retrigger_failed')
+})
+
+// ── Bulk Actions Handler ──
+admin.post('/bulk-action', async (c) => {
+  const { env } = c
+  const body = await c.req.parseBody()
+  const action = (body.action || '').toString()
+  let ids = body['ids']
+  if (!ids) return c.redirect('/admin')
+
+  if (!Array.isArray(ids)) {
+    ids = [ids]
+  }
+
+  const client = await getDb(c).connect()
+
+  for (const idStr of ids) {
+    const id = parseInt(idStr.toString(), 10)
+    if (isNaN(id)) continue
+
+    const res = await client.query(`SELECT email, name, position FROM waitlist_entries WHERE id = $1`, [id])
+    const entry = res.rows[0] as { email: string; name: string; position: number } | undefined
+    if (!entry) continue
+
+    if (action === 'invite') {
+      const ok = await sendBetaInviteEmail(env, entry.email, entry.name, entry.position)
+      if (ok) {
+        await client.query(`UPDATE waitlist_entries SET status = 'invited', invited_at = CURRENT_TIMESTAMP WHERE id = $1`, [id])
+      }
+    } else if (action === 'retrigger') {
+      const ok = await sendWaitlistEmail(env, entry.email, entry.name, entry.position)
+      if (ok) {
+        await client.query(`UPDATE waitlist_entries SET email_sent = 1 WHERE id = $1`, [id])
+      }
+    } else if (action === 'delete') {
+      await client.query(`DELETE FROM waitlist_entries WHERE id = $1`, [id])
+    }
+  }
+
+  return c.redirect('/admin?msg=bulk_success')
+})
+
+// ── Add VIP Lead Form Handler ──
+admin.post('/add-lead', async (c) => {
+  const { env } = c
+  const body = await c.req.parseBody()
+  const name = (body.name || '').toString().trim()
+  const email = (body.email || '').toString().trim().toLowerCase()
+  const role = (body.role || 'founder').toString().trim()
+  const company = (body.company || '').toString().trim()
+  const github = (body.github || '').toString().trim()
+
+  if (name.length >= 2 && email.includes('@')) {
+    const client = await getDb(c).connect()
+    const countRes = await client.query(`SELECT COUNT(*) as cnt FROM waitlist_entries`)
+    const nextPos = Number(countRes.rows[0]?.cnt ?? 0) + 1
+
+    await client.query(
+      `INSERT INTO waitlist_entries (name, email, role, company, github, position) 
+       VALUES ($1, $2, $3, $4, $5, $6) 
+       ON CONFLICT (email) DO NOTHING`,
+      [name, email, role, company || null, github || null, nextPos]
+    )
+
+    await sendWaitlistEmail(env, email, name, nextPos)
+    await client.query(`UPDATE waitlist_entries SET email_sent = 1 WHERE email = $1`, [email])
+  }
+
+  return c.redirect('/admin?msg=add_lead_success')
+})
+
+// ── Delete Single Entry Handler ──
+admin.post('/delete', async (c) => {
+  const body = await c.req.parseBody()
+  const id = parseInt((body.id || '').toString(), 10)
+  if (!isNaN(id)) {
+    const client = await getDb(c).connect()
+    await client.query(`DELETE FROM waitlist_entries WHERE id = $1`, [id])
+  }
+  return c.redirect('/admin?msg=delete_success')
 })
 
 // ── CSV export (respects current filters) ──
@@ -507,6 +920,7 @@ admin.get('/export.csv', async (c) => {
   const url = new URL(c.req.url)
   const search = (url.searchParams.get('q') || '').trim()
   const roleFilter = (url.searchParams.get('role') || '').trim()
+  const statusFilter = (url.searchParams.get('status') || '').trim()
 
   let where = 'WHERE 1=1'
   const params: any[] = []
@@ -520,25 +934,32 @@ admin.get('/export.csv', async (c) => {
     where += ` AND role = $${pIdx++}`
     params.push(roleFilter)
   }
+  if (statusFilter) {
+    where += ` AND COALESCE(status, 'pending') = $${pIdx++}`
+    params.push(statusFilter)
+  }
 
   const client = await getDb(c).connect()
   const res = await client.query(
-    `SELECT id, name, email, role, company, github, position, created_at
+    `SELECT id, name, email, role, company, github, position, created_at, status, invited_at
      FROM waitlist_entries ${where}
      ORDER BY created_at ASC`, params
   )
   const rows = (res.rows || []) as Entry[]
-  const header = ['Position', 'Name', 'Email', 'Role', 'Company', 'GitHub', 'Joined At (UTC)']
+  const header = ['Position', 'Priority Score', 'Name', 'Email', 'Role', 'Company', 'GitHub', 'Beta Status', 'Joined At (UTC)']
   const lines = [header.join(',')]
   for (const r of rows) {
+    const priority = calculatePriorityScore(r);
     lines.push(
       [
         616 + r.position,
+        `${priority.score} (${priority.level})`,
         escapeCsv(r.name),
         escapeCsv(r.email),
         escapeCsv(ROLE_LABELS[r.role] || r.role),
         escapeCsv(r.company || ''),
         escapeCsv(r.github || ''),
+        escapeCsv(r.status || 'pending'),
         escapeCsv(r.created_at),
       ].join(',')
     )
