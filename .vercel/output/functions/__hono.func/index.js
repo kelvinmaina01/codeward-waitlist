@@ -285,6 +285,8 @@ var Rr=Object.defineProperty;var Ht=e=>{throw TypeError(e)};var Cr=(e,t,r)=>t in
       max-width: 760px;
       margin: 0 auto;
       padding: 60px 24px 100px;
+      word-break: break-word;
+      overflow-wrap: break-word;
     }
     .legal-header {
       margin-bottom: 48px;
@@ -305,7 +307,7 @@ var Rr=Object.defineProperty;var Ht=e=>{throw TypeError(e)};var Cr=(e,t,r)=>t in
       color: var(--brand-green);
     }
     .legal-title {
-      font-size: 36px;
+      font-size: clamp(28px, 6vw, 36px);
       font-weight: 700;
       color: var(--text);
       letter-spacing: -0.02em;
@@ -346,8 +348,32 @@ var Rr=Object.defineProperty;var Ht=e=>{throw TypeError(e)};var Cr=(e,t,r)=>t in
       display: flex;
       justify-content: space-between;
       align-items: center;
+      flex-wrap: wrap;
+      gap: 16px;
       color: var(--muted);
       font-size: 14px;
+    }
+    @media (max-width: 640px) {
+      .legal-container {
+        padding: 36px 16px 60px;
+      }
+      .legal-header {
+        margin-bottom: 32px;
+        padding-bottom: 24px;
+      }
+      .legal-section {
+        margin-bottom: 28px;
+      }
+      .legal-section h2 {
+        font-size: 18px;
+      }
+      .legal-section p {
+        font-size: 15px;
+      }
+      .legal-footer {
+        flex-direction: column;
+        align-items: flex-start;
+      }
     }
   </style>
 </head>
@@ -894,7 +920,7 @@ var Rr=Object.defineProperty;var Ht=e=>{throw TypeError(e)};var Cr=(e,t,r)=>t in
 
   <!-- ============ FORM SECTION ============ -->
   <section class="form-section" id="join-form">
-    <div class="form-container reveal" id="form-card">
+    <div class="form-container form-card reveal" id="form-card">
       <div id="form-view">
         <div class="form-card-header">
           <h2>Join the waitlist</h2>

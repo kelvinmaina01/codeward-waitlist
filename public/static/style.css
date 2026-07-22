@@ -397,38 +397,7 @@ body {
   font-size: 14px;
 }
 
-/* ── HOW IT WORKS ── */
-.how-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  column-gap: 64px;
-  row-gap: 80px;
-}
 
-.how-item {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.how-step {
-  font-family: var(--font-mono);
-  font-size: 14px;
-  color: var(--brand-green);
-  font-weight: 600;
-}
-
-.how-item h3 {
-  font-size: 24px;
-  font-weight: 600;
-  letter-spacing: -0.02em;
-}
-
-.how-item p {
-  font-size: 17px;
-  color: var(--muted);
-  line-height: 1.6;
-}
 
 /* ── FORM SECTION ── */
 .form-section {
@@ -931,17 +900,244 @@ body {
   transform: scale(1.03);
 }
 
-@media (max-width: 768px) {
-  .hero-title { font-size: 40px; }
-  .problem-grid, .how-grid, .how-grid { grid-template-columns: 1fr; gap: 2px; }
-  .counter-strip { flex-direction: column; align-items: center; }
-  .field-row { grid-template-columns: 1fr; gap: 24px; }
+/* ============================================================
+   RESPONSIVE DESIGN & MEDIA QUERIES (Mobile, Tablet & Desktop)
+   ============================================================ */
+
+/* ── Large Desktop / Ultra-Wide Screens (> 1400px) ── */
+@media (min-width: 1400px) {
+  .page {
+    max-width: 1140px;
+  }
+}
+
+/* ── Tablet & Small Laptops (< 1024px) ── */
+@media (max-width: 1024px) {
+  .page {
+    padding: 80px 24px;
+    gap: 80px;
+  }
+  .form-container, .form-card {
+    padding: 48px 36px;
+  }
+  .linkedin-banner {
+    padding: 36px 32px;
+    gap: 28px;
+    grid-template-columns: 180px 1fr auto;
+  }
+}
+
+/* ── Tablets (< 900px) ── */
+@media (max-width: 900px) {
   .linkedin-banner {
     grid-template-columns: 1fr;
-    padding: 32px 24px;
     gap: 24px;
   }
-  .linkedin-banner-graphic { display: none; }
+  .linkedin-banner-graphic {
+    display: none;
+  }
+  .linkedin-banner-cta {
+    width: 100%;
+  }
+  .linkedin-banner-btn {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+/* ── Mobile & Small Tablets (< 768px) ── */
+@media (max-width: 768px) {
+  .page-header {
+    padding: 20px 16px;
+  }
+  .page {
+    padding: 48px 16px;
+    gap: 56px;
+  }
+  .hero {
+    margin-top: 16px;
+    gap: 16px;
+  }
+  .hero-title {
+    font-size: clamp(30px, 7.5vw, 44px);
+    line-height: 1.1;
+  }
+  .hero-sub {
+    font-size: clamp(15px, 4.2vw, 18px);
+    line-height: 1.55;
+  }
+  .hero-cta {
+    width: 100%;
+    max-width: 320px;
+    padding: 14px 28px;
+    font-size: 15px;
+  }
+  .counter-section {
+    gap: 32px;
+  }
+  .counter-strip {
+    grid-template-columns: 1fr 1fr;
+    display: grid;
+    gap: 24px;
+    text-align: center;
+  }
+  .counter-item {
+    align-items: center;
+  }
+  .counter-item .num {
+    font-size: clamp(26px, 7vw, 36px);
+  }
+  .agent-pill {
+    font-size: 11px;
+    padding: 5px 12px;
+  }
+  .section-block {
+    gap: 36px;
+  }
+  .section-heading {
+    font-size: clamp(24px, 6vw, 36px);
+  }
+  .how-grid {
+    grid-template-columns: 1fr;
+    gap: 1px;
+    border-radius: 16px;
+  }
+  .how-item {
+    padding: 28px 20px;
+    gap: 14px;
+  }
+  .how-item h3 {
+    font-size: 19px;
+  }
+  .how-item p {
+    font-size: 15px;
+  }
+  .problem-grid {
+    grid-template-columns: 1fr;
+    column-gap: 0;
+    row-gap: 24px;
+  }
+  .problem-item {
+    padding: 24px 20px;
+    gap: 12px;
+    border-radius: 14px;
+  }
+  .problem-item h3 {
+    font-size: 20px;
+  }
+  .problem-item p {
+    font-size: 15px;
+  }
+  .testimonial-grid {
+    gap: 32px;
+  }
+  .testimonial-item {
+    padding: 28px 20px;
+    gap: 16px;
+    border-radius: 16px;
+  }
+  .testimonial-text {
+    font-size: 18px;
+    line-height: 1.5;
+  }
+  .form-container, .form-card {
+    padding: 28px 20px;
+    border-radius: 20px;
+  }
+  .form-card-header h2 {
+    font-size: 24px;
+  }
+  .field-row {
+    grid-template-columns: 1fr;
+    gap: 18px;
+  }
+  .field input, .field select {
+    font-size: 16px; /* Prevents auto-zoom on mobile Safari */
+    padding: 13px 14px;
+  }
+  .submit-btn {
+    font-size: 16px;
+    padding: 15px 24px;
+  }
+  .linkedin-banner {
+    padding: 28px 20px;
+    border-radius: 20px;
+  }
+  .linkedin-banner-heading {
+    font-size: 22px;
+  }
+  .linkedin-banner-sub {
+    font-size: 14px;
+  }
+  .modal-content {
+    padding: 28px 20px;
+    max-width: 92vw;
+    border-radius: 20px;
+    max-height: 90vh;
+    overflow-y: auto;
+  }
+  .modal-close {
+    top: 16px;
+    right: 16px;
+    font-size: 28px;
+  }
+  .success-position strong {
+    font-size: clamp(32px, 8vw, 44px);
+  }
+}
+
+/* ── Small Mobile (< 480px) ── */
+@media (max-width: 480px) {
+  .hero-title {
+    font-size: clamp(26px, 7vw, 32px);
+  }
+  .hero-sub {
+    font-size: 14.5px;
+  }
+  .counter-strip {
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+  .counter-item .num {
+    font-size: 26px;
+  }
+  .counter-item .label {
+    font-size: 12px;
+  }
+  .form-container, .form-card {
+    padding: 20px 14px;
+    border-radius: 16px;
+  }
+  .problem-item {
+    padding: 18px 14px;
+  }
+  .testimonial-item {
+    padding: 20px 14px;
+  }
+  .testimonial-text {
+    font-size: 16px;
+  }
+  .checkbox-label {
+    font-size: 13px !important;
+    align-items: flex-start;
+  }
+  .checkbox-label input[type="checkbox"] {
+    margin-top: 2px;
+  }
+  .social-proof-row {
+    margin-bottom: 24px;
+  }
+}
+
+/* ── Extra Small Mobile (< 360px) ── */
+@media (max-width: 360px) {
+  .counter-strip {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+  .form-container, .form-card {
+    padding: 16px 10px;
+  }
 }
 
 
