@@ -261,29 +261,6 @@
   }
 
   /* ============================================================
-     DRAWER HANDLING
-     ============================================================ */
-  var openTermsBtn = document.getElementById('open-terms-btn');
-  var closeTermsBtn = document.getElementById('close-terms-btn');
-  var termsDrawer = document.getElementById('terms-drawer');
-  var termsOverlay = document.getElementById('terms-drawer-overlay');
-
-  function openTerms(e) {
-    if (e) e.preventDefault();
-    if (termsDrawer) termsDrawer.classList.add('open');
-    if (termsOverlay) termsOverlay.classList.add('open');
-  }
-
-  function closeTerms() {
-    if (termsDrawer) termsDrawer.classList.remove('open');
-    if (termsOverlay) termsOverlay.classList.remove('open');
-  }
-
-  if (openTermsBtn) openTermsBtn.addEventListener('click', openTerms);
-  if (closeTermsBtn) closeTermsBtn.addEventListener('click', closeTerms);
-  if (termsOverlay) termsOverlay.addEventListener('click', closeTerms);
-
-  /* ============================================================
      SUCCESS MODAL + CONFETTI
      ============================================================ */
   var modalOverlay = document.getElementById('modal-overlay');

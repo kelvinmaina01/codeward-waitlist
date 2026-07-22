@@ -202,8 +202,16 @@
       var nameOk = validateField('name', function (v) { return v.length >= 2; });
       var emailOk = validateField('email', function (v) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v); });
       var roleOk = validateField('role', function (v) { return v !== ''; });
+      
+      var termsOk = document.getElementById('terms') ? document.getElementById('terms').checked : true;
+      var termsField = document.getElementById('field-terms');
+      if (termsField) termsField.classList.toggle('has-error', !termsOk);
+      if (!termsOk && termsField) {
+        termsField.classList.remove('shake');
+        requestAnimationFrame(function () { termsField.classList.add('shake'); });
+      }
 
-      if (!nameOk || !emailOk || !roleOk) return;
+      if (!nameOk || !emailOk || !roleOk || !termsOk) return;
 
       var payload = {
         name: document.getElementById('name').value.trim(),
@@ -241,10 +249,10 @@
         });
     });
 
-    ['name', 'email', 'role'].forEach(function (id) {
+    ['name', 'email', 'role', 'terms'].forEach(function (id) {
       var el = document.getElementById(id);
       if (el) {
-        el.addEventListener('input', function () {
+        el.addEventListener(id === 'terms' ? 'change' : 'input', function () {
           var field = document.getElementById('field-' + id);
           if (field) field.classList.remove('has-error');
         });

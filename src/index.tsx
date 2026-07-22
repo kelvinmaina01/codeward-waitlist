@@ -97,6 +97,143 @@ app.onError((err, c) => {
 
 app.route('/admin', admin)
 
+// ── Page: Terms and Privacy Policy ──
+app.get('/terms', (c) => {
+  return c.html(/* html */`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Terms & Privacy Policy — Codeward</title>
+  <meta name="description" content="Codeward's Terms of Service and Privacy Policy outlining our commitment to data privacy, security, and developer control." />
+  <link rel="icon" type="image/gif" href="/static/images/logo.gif" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/style.css?v=4" />
+  <style>
+    .legal-container {
+      max-width: 760px;
+      margin: 0 auto;
+      padding: 60px 24px 100px;
+    }
+    .legal-header {
+      margin-bottom: 48px;
+      padding-bottom: 32px;
+      border-bottom: 1px solid var(--border);
+    }
+    .back-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--muted);
+      font-size: 14px;
+      text-decoration: none;
+      margin-bottom: 24px;
+      transition: color 0.2s;
+    }
+    .back-link:hover {
+      color: var(--brand-green);
+    }
+    .legal-title {
+      font-size: 36px;
+      font-weight: 700;
+      color: var(--text);
+      letter-spacing: -0.02em;
+      margin-bottom: 12px;
+    }
+    .legal-updated {
+      font-size: 14px;
+      color: var(--muted);
+    }
+    .legal-section {
+      margin-bottom: 40px;
+    }
+    .legal-section h2 {
+      font-size: 20px;
+      font-weight: 600;
+      color: var(--brand-green);
+      margin-bottom: 16px;
+      letter-spacing: -0.01em;
+    }
+    .legal-section p {
+      font-size: 16px;
+      color: #a1a1aa;
+      line-height: 1.7;
+      margin-bottom: 16px;
+    }
+    .legal-section ul {
+      margin: 0 0 16px 20px;
+      color: #a1a1aa;
+      line-height: 1.7;
+    }
+    .legal-section li {
+      margin-bottom: 8px;
+    }
+    .legal-footer {
+      margin-top: 60px;
+      padding-top: 32px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      color: var(--muted);
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+  <div class="legal-container">
+    <div class="legal-header">
+      <a href="/" class="back-link">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+        Back to Waitlist
+      </a>
+      <h1 class="legal-title">Terms & Privacy Policy</h1>
+      <p class="legal-updated">Last updated: July 2026</p>
+    </div>
+
+    <div class="legal-section">
+      <h2>1. Data Privacy Guarantee</h2>
+      <p>Your privacy is our top priority. We only collect the information provided in our waitlist form (name, email address, company/organisation, role, and GitHub profile) for the explicit purpose of managing your waitlist position and notifying you when Codeward early access is ready.</p>
+      <p>We strictly do not sell your personal data, send unsolicited spam, or share your information with unapproved third parties.</p>
+    </div>
+
+    <div class="legal-section">
+      <h2>2. Information Collection & Usage</h2>
+      <p>When you sign up for the Codeward waitlist, we collect:</p>
+      <ul>
+        <li><strong>Full Name & Email Address:</strong> Used to identify your reservation and send access notifications.</li>
+        <li><strong>Role & Company:</strong> Used to prioritize sandbox provisioning for developer teams.</li>
+        <li><strong>GitHub Profile:</strong> Optional information to verify developer identity for early preview access.</li>
+      </ul>
+    </div>
+
+    <div class="legal-section">
+      <h2>3. Security & Control</h2>
+      <p>All waitlist data is encrypted in transit using standard TLS protocols and stored securely in our database. We maintain strict access controls so your contact details remain protected.</p>
+      <p>You have full ownership of your data. You may request complete removal of your email and personal details from our system at any time by contacting our support team.</p>
+    </div>
+
+    <div class="legal-section">
+      <h2>4. Terms of Service</h2>
+      <p>By submitting the waitlist form, you agree to receive communications regarding Codeward's progress, product launches, and access invitations. Early access spots are allocated at Codeward's discretion based on capacity.</p>
+    </div>
+
+    <div class="legal-section">
+      <h2>5. Contact Us</h2>
+      <p>If you have any questions regarding these terms or your personal data, please reach out to us at <a href="mailto:support@codeward.ai" style="color: var(--brand-green); text-decoration: underline;">support@codeward.ai</a>.</p>
+    </div>
+
+    <div class="legal-footer">
+      <span>&copy; ${new Date().getFullYear()} Codeward. All rights reserved.</span>
+      <a href="/" class="back-link" style="margin-bottom: 0;">Back to Home</a>
+    </div>
+  </div>
+</body>
+</html>`)
+})
+
 const BASE_COUNT = 617
 
 // ── API: get current waitlist stats ──
@@ -896,7 +1033,7 @@ const HTML_PAGE = /* html */ `<!DOCTYPE html>
           <div class="field checkbox-field" id="field-terms">
             <label class="checkbox-label">
               <input type="checkbox" name="terms" id="terms" required />
-              <span>I accept the <a href="#" id="open-terms-btn">Terms and Privacy Policy</a></span>
+              <span>I accept the <a href="/terms" target="_blank" rel="noopener noreferrer">Terms and Privacy Policy</a></span>
             </label>
             <span class="field-error">You must accept the terms to join.</span>
           </div>
@@ -957,22 +1094,6 @@ const HTML_PAGE = /* html */ `<!DOCTYPE html>
 </div>
 
 <script src="/static/app.js?v=4"></script>
-
-<!-- ============ TERMS DRAWER ============ -->
-<div class="drawer-overlay" id="terms-drawer-overlay"></div>
-<div class="drawer" id="terms-drawer">
-  <div class="drawer-header">
-    <h2>Terms and Privacy Policy</h2>
-    <button class="drawer-close" id="close-terms-btn" aria-label="Close">&times;</button>
-  </div>
-  <div class="drawer-content">
-    <h3>Data Privacy Guarantee</h3>
-    <p>Your privacy is our top priority. We only collect the information provided in this form (name, email, role, etc.) to manage your waitlist position and notify you when Codeward is ready.</p>
-    <p>We do not sell your data, send you spam, or share your information with any third parties.</p>
-    <h3>Security & Control</h3>
-    <p>All waitlist data is encrypted in transit and at rest. You have full control over your data and can unsubscribe or request deletion of your information at any time.</p>
-  </div>
-</div>
 
 </body>
 </html>`

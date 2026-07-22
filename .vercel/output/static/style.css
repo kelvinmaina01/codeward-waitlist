@@ -782,11 +782,166 @@ body {
   transform: translateY(0);
 }
 
+/* ── LINKEDIN FOLLOW BANNER ── */
+.linkedin-banner {
+  width: 100%;
+  background: linear-gradient(135deg, #0a2a1a 0%, #0a1628 50%, #12093a 100%);
+  border: 1px solid rgba(34, 197, 94, 0.2);
+  border-radius: 24px;
+  padding: 48px 40px;
+  display: grid;
+  grid-template-columns: 220px 1fr auto;
+  align-items: center;
+  gap: 40px;
+  position: relative;
+  overflow: hidden;
+}
+
+.linkedin-banner::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at 20% 50%, rgba(34, 197, 94, 0.08) 0%, transparent 60%),
+              radial-gradient(ellipse at 80% 50%, rgba(10, 102, 194, 0.08) 0%, transparent 60%);
+  pointer-events: none;
+}
+
+/* ── Banner Graphic (decorative mock UI) ── */
+.linkedin-banner-graphic {
+  position: relative;
+  height: 110px;
+  flex-shrink: 0;
+}
+
+.banner-card {
+  position: absolute;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  backdrop-filter: blur(4px);
+}
+
+.banner-card--1 {
+  left: 0; top: 0;
+  width: 100px; height: 75px;
+  animation: bannerFloat 4s ease-in-out infinite;
+  z-index: 3;
+}
+.banner-card--2 {
+  left: 55px; top: 25px;
+  width: 90px; height: 85px;
+  display: flex; flex-direction: row;
+  align-items: flex-end;
+  gap: 5px;
+  padding: 10px 12px;
+  animation: bannerFloat 4s ease-in-out 0.5s infinite;
+  z-index: 2;
+}
+.banner-card--3 {
+  left: 115px; top: 5px;
+  width: 100px; height: 75px;
+  animation: bannerFloat 4s ease-in-out 1s infinite;
+  z-index: 1;
+}
+
+@keyframes bannerFloat {
+  0%, 100% { transform: translateY(0); }
+  50%       { transform: translateY(-6px); }
+}
+
+.bc-dot {
+  width: 10px; height: 10px;
+  border-radius: 50%;
+}
+.bc-dot--green { background: var(--brand-green); }
+
+.bc-line {
+  height: 6px; background: rgba(255,255,255,0.15); border-radius: 3px; width: 100%;
+}
+.bc-line--short { width: 60%; }
+
+.bc-bar {
+  width: 14px; height: 20px;
+  background: rgba(34, 197, 94, 0.3);
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+.bc-bar--tall { height: 35px; background: rgba(192, 132, 252, 0.4); }
+
+.bc-badge {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--brand-green);
+  background: rgba(34, 197, 94, 0.15);
+  border: 1px solid rgba(34, 197, 94, 0.3);
+  border-radius: 4px;
+  padding: 3px 6px;
+  white-space: nowrap;
+}
+
+/* ── Banner Body ── */
+.linkedin-banner-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.linkedin-banner-heading {
+  font-size: clamp(22px, 3vw, 28px);
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+}
+
+.linkedin-banner-sub {
+  font-size: 16px;
+  color: var(--muted);
+  line-height: 1.6;
+  max-width: 480px;
+}
+
+/* ── Banner CTA ── */
+.linkedin-banner-cta {
+  flex-shrink: 0;
+}
+
+.linkedin-banner-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  background: #0A66C2;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 600;
+  padding: 14px 24px;
+  border-radius: 12px;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background 0.2s, transform 0.2s;
+  letter-spacing: -0.01em;
+}
+
+.linkedin-banner-btn:hover {
+  background: #004182;
+  transform: scale(1.03);
+}
+
 @media (max-width: 768px) {
   .hero-title { font-size: 40px; }
   .problem-grid, .how-grid, .how-grid { grid-template-columns: 1fr; gap: 2px; }
   .counter-strip { flex-direction: column; align-items: center; }
   .field-row { grid-template-columns: 1fr; gap: 24px; }
+  .linkedin-banner {
+    grid-template-columns: 1fr;
+    padding: 32px 24px;
+    gap: 24px;
+  }
+  .linkedin-banner-graphic { display: none; }
 }
 
 
@@ -879,3 +1034,137 @@ body {
 .avatar-stack .av:nth-child(7) { animation-delay: 0.35s; }
 .avatar-stack .av:nth-child(8) { animation-delay: 0.40s; }
 
+
+/* ── TERMS CHECKBOX ── */
+.checkbox-field {
+  flex-direction: column !important;
+  align-items: flex-start !important;
+  gap: 4px !important;
+  margin-top: 16px;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  font-size: 14px !important;
+  color: var(--muted) !important;
+  user-select: none;
+}
+
+.checkbox-label input[type="checkbox"] {
+  appearance: auto;
+  width: auto;
+  padding: 0;
+  margin: 0;
+  accent-color: var(--brand-green);
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
+.checkbox-label a {
+  color: var(--brand-green);
+  text-decoration: none;
+  font-weight: 500;
+  border-bottom: 1px dotted rgba(34, 197, 94, 0.5);
+  transition: all 0.2s;
+}
+
+.checkbox-label a:hover {
+  color: var(--brand-green-hover);
+  border-bottom-color: var(--brand-green-hover);
+}
+
+/* ── DRAWER (SIDE PULL) ── */
+.drawer-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
+  z-index: 999;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.3s ease, visibility 0.3s ease;
+}
+
+.drawer-overlay.open {
+  opacity: 1;
+  visibility: visible;
+}
+
+.drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  width: 100%;
+  max-width: 420px;
+  height: 100vh;
+  background: #09090b;
+  border-left: 1px solid var(--border);
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  transform: translateX(100%);
+  transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: -10px 0 30px rgba(0,0,0,0.5);
+}
+
+.drawer.open {
+  transform: translateX(0);
+}
+
+.drawer-header {
+  padding: 24px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.drawer-header h2 {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text);
+  letter-spacing: -0.01em;
+}
+
+.drawer-close {
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 28px;
+  line-height: 1;
+  cursor: pointer;
+  transition: color 0.2s;
+}
+
+.drawer-close:hover {
+  color: var(--text);
+}
+
+.drawer-content {
+  padding: 24px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.drawer-content h3 {
+  font-size: 16px;
+  color: var(--brand-green);
+  margin-top: 24px;
+  margin-bottom: 12px;
+  font-weight: 600;
+}
+
+.drawer-content h3:first-child {
+  margin-top: 0;
+}
+
+.drawer-content p {
+  font-size: 15px;
+  color: var(--muted);
+  line-height: 1.6;
+  margin-bottom: 16px;
+}
