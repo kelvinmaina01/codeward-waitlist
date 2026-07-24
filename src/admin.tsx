@@ -4,7 +4,7 @@ if (typeof process !== 'undefined' && process.env) {
 
 import { Hono } from 'hono'
 import { getCookie, setCookie, deleteCookie } from 'hono/cookie'
-import { sendWaitlistEmail, getSql } from './index'
+import { sendWaitlistEmail, sendResendWithRetry, sendWeeklyDigestEmail, getSql } from './index'
 
 function getDb(c?: any) {
   return getSql(c);
@@ -26,6 +26,13 @@ async function ensureSchemaUpgraded(c: any) {
     const client = await getDb(c).connect();
     await client.query(`ALTER TABLE waitlist_entries ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'pending';`);
     await client.query(`ALTER TABLE waitlist_entries ADD COLUMN IF NOT EXISTS invited_at TIMESTAMP;`);
+    await client.query(`ALTER TABLE waitlist_entries ADD COLUMN IF NOT EXISTS last_email_error TEXT;`);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS daily_milestones (
+        day DATE PRIMARY KEY,
+        milestone_10_sent INTEGER DEFAULT 0
+      );
+    `);
     dbMigrated = true;
   } catch (e) {
     console.error('Failed schema upgrade:', e);
@@ -79,11 +86,8 @@ export function calculatePriorityScore(entry: { email: string; role: string; com
 }
 
 // ── Beta Invitation Email Dispatch ──
-export async function sendBetaInviteEmail(env: any, email: string, name: string, position: number): Promise<boolean> {
-  const apiKey = env.RESEND_API_KEY || (typeof process !== 'undefined' ? process.env?.RESEND_API_KEY : undefined);
-  if (!apiKey) return false;
-  try {
-    const inviteHtml = `<!DOCTYPE html>
+export async function sendBetaInviteEmail(env: any, email: string, name: string, position: number): Promise<{ ok: boolean; error?: string }> {
+  const inviteHtml = `<!DOCTYPE html>
 <html>
 <head>
 <meta charset="utf-8" />
@@ -106,24 +110,12 @@ export async function sendBetaInviteEmail(env: any, email: string, name: string,
 </body>
 </html>`;
 
-    const res = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        from: 'Codeward <founders@codeward.cloud>',
-        to: [email],
-        subject: '🎉 Your Codeward Early Access is Ready!',
-        html: inviteHtml
-      })
-    });
-    return res.ok;
-  } catch (err) {
-    console.error('Failed sending beta invite email:', err);
-    return false;
-  }
+  return sendResendWithRetry(env, {
+    from: 'Codeward <founders@codeward.cloud>',
+    to: [email],
+    subject: '🎉 Your Codeward Early Access is Ready!',
+    html: inviteHtml
+  });
 }
 
 // ── Admin Login Page ──
@@ -338,6 +330,13 @@ admin.get('/', async (c) => {
     alertHtml = `<div style="background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); color: #10b981; padding: 12px 16px; border-radius: 8px; font-weight: 500;">✓ Bulk action executed successfully!</div>`
   } else if (msg === 'delete_success') {
     alertHtml = `<div style="background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); color: #f87171; padding: 12px 16px; border-radius: 8px; font-weight: 500;">✓ Waitlist entry deleted.</div>`
+  } else if (msg === 'queue_processed') {
+    const cnt = url.searchParams.get('cnt') || '0';
+    alertHtml = `<div style="background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); color: #10b981; padding: 12px 16px; border-radius: 8px; font-weight: 500;">⚡ Queue processed: ${cnt} pending email(s) successfully resent!</div>`
+  } else if (msg === 'digest_success') {
+    alertHtml = `<div style="background: rgba(168, 85, 247, 0.1); border: 1px solid rgba(168, 85, 247, 0.3); color: #c084fc; padding: 12px 16px; border-radius: 8px; font-weight: 500;">📧 Weekly digest report dispatched to your inbox!</div>`
+  } else if (msg === 'digest_failed') {
+    alertHtml = `<div style="background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); color: #f87171; padding: 12px 16px; border-radius: 8px; font-weight: 500;">⚠️ Failed to dispatch weekly digest email.</div>`
   }
 
   let where = 'WHERE 1=1'
@@ -359,6 +358,15 @@ admin.get('/', async (c) => {
   }
 
   const client = await getDb(c).connect()
+
+  // Query Failed & Pending Email Queue
+  const failedQueueRes = await client.query(
+    `SELECT id, name, email, role, company, position, created_at, last_email_error
+     FROM waitlist_entries
+     WHERE email_sent = 0 OR last_email_error IS NOT NULL
+     ORDER BY created_at DESC`
+  )
+  const failedEntries = failedQueueRes.rows || []
 
   // Fetch all matching entries for priority filtering & pagination
   const allListRes = await client.query(
@@ -765,7 +773,73 @@ admin.get('/', async (c) => {
         ${dowCardsHtml}
       </div>
     </section>
-  </div>
+  <!-- ── FAILED & PENDING EMAIL QUEUE PANEL ── -->
+  <section class="panel" style="border: 1px solid ${failedEntries.length > 0 ? 'rgba(239, 68, 68, 0.4)' : 'var(--border)'}; background: ${failedEntries.length > 0 ? 'rgba(239, 68, 68, 0.03)' : 'var(--surface)'};">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:14px;">
+      <div>
+        <h2 class="panel-title" style="margin:0;color:${failedEntries.length > 0 ? '#f87171' : 'var(--text)'};">
+          ${failedEntries.length > 0 ? '⚠️ Failed & Pending Email Queue (' + failedEntries.length + ')' : '📬 Email Queue Status'}
+        </h2>
+        <p style="font-size:12.5px;color:var(--muted);margin-top:2px;">
+          ${failedEntries.length > 0 ? 'Emails that encountered Resend rate limits or API delivery issues' : 'All waitlist emails have been delivered successfully!'}
+        </p>
+      </div>
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+        <form method="post" action="/admin/send-weekly-digest" style="margin:0;">
+          <button type="submit" class="action-btn" style="background:rgba(168,85,247,0.15);color:#c084fc;border:1px solid rgba(168,85,247,0.3);">
+            📧 Send Weekly Digest Now
+          </button>
+        </form>
+        ${failedEntries.length > 0 ? `
+          <form method="post" action="/admin/retry-failed-queue" style="margin:0;">
+            <button type="submit" class="action-btn invite-btn" style="background:#ef4444;">
+              ⚡ Process Queue / Retry All (${failedEntries.length})
+            </button>
+          </form>
+        ` : ''}
+      </div>
+    </div>
+
+    ${failedEntries.length > 0 ? `
+      <div class="table-wrap">
+        <table class="entries-table">
+          <thead>
+            <tr>
+              <th>Pos</th>
+              <th>Name / Email</th>
+              <th>Role</th>
+              <th>Failure Reason</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${failedEntries.slice(0, 10).map((fe: any) => `
+              <tr>
+                <td class="pos-cell">#${616 + fe.position}</td>
+                <td>
+                  <div class="name-cell">${escapeHtml(fe.name)}</div>
+                  <div class="email-cell">${escapeHtml(fe.email)}</div>
+                </td>
+                <td>${escapeHtml(ROLE_LABELS[fe.role] || fe.role)}</td>
+                <td>
+                  <span style="font-family:var(--font-mono);font-size:11px;color:#f87171;background:rgba(239,68,68,0.12);padding:3px 8px;border-radius:6px;border:1px solid rgba(239,68,68,0.25);">
+                    ${escapeHtml(fe.last_email_error || 'Delivery Pending')}
+                  </span>
+                </td>
+                <td>
+                  <form method="post" action="/admin/retrigger" style="margin:0;">
+                    <input type="hidden" name="email" value="${escapeHtml(fe.email)}" />
+                    <button type="submit" class="action-btn">Retry Send</button>
+                  </form>
+                </td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+      ${failedEntries.length > 10 ? `<p style="font-size:12px;color:var(--muted);margin-top:10px;">Showing 10 of ${failedEntries.length} queued emails.</p>` : ''}
+    ` : ''}
+  </section>
 
   <!-- ── ROLE BREAKDOWN PANEL ── -->
   <section class="panel role-breakdown-panel">
@@ -946,10 +1020,12 @@ admin.post('/invite', async (c) => {
   const entry = res.rows[0] as { name: string; position: number } | undefined
 
   if (entry) {
-    const success = await sendBetaInviteEmail(env, email, entry.name, entry.position)
-    if (success) {
-      await client.query(`UPDATE waitlist_entries SET status = 'invited', invited_at = CURRENT_TIMESTAMP WHERE email = $1`, [email])
+    const inviteRes = await sendBetaInviteEmail(env, email, entry.name, entry.position)
+    if (inviteRes.ok) {
+      await client.query(`UPDATE waitlist_entries SET status = 'invited', invited_at = CURRENT_TIMESTAMP, last_email_error = NULL WHERE email = $1`, [email])
       return c.redirect('/admin?msg=invite_success')
+    } else {
+      await client.query(`UPDATE waitlist_entries SET last_email_error = $1 WHERE email = $2`, [inviteRes.error || 'Failed sending invite', email])
     }
   }
   return c.redirect('/admin?msg=retrigger_failed')
@@ -978,21 +1054,60 @@ admin.post('/bulk-action', async (c) => {
     if (!entry) continue
 
     if (action === 'invite') {
-      const ok = await sendBetaInviteEmail(env, entry.email, entry.name, entry.position)
-      if (ok) {
-        await client.query(`UPDATE waitlist_entries SET status = 'invited', invited_at = CURRENT_TIMESTAMP WHERE id = $1`, [id])
+      const inviteRes = await sendBetaInviteEmail(env, entry.email, entry.name, entry.position)
+      if (inviteRes.ok) {
+        await client.query(`UPDATE waitlist_entries SET status = 'invited', invited_at = CURRENT_TIMESTAMP, last_email_error = NULL WHERE id = $1`, [id])
+      } else {
+        await client.query(`UPDATE waitlist_entries SET last_email_error = $1 WHERE id = $2`, [inviteRes.error || 'Bulk invite failed', id])
       }
     } else if (action === 'retrigger') {
-      const ok = await sendWaitlistEmail(env, entry.email, entry.name, entry.position)
-      if (ok) {
-        await client.query(`UPDATE waitlist_entries SET email_sent = 1 WHERE id = $1`, [id])
+      const sendRes = await sendWaitlistEmail(env, entry.email, entry.name, entry.position)
+      if (sendRes.ok) {
+        await client.query(`UPDATE waitlist_entries SET email_sent = 1, last_email_error = NULL WHERE id = $1`, [id])
+      } else {
+        await client.query(`UPDATE waitlist_entries SET email_sent = 0, last_email_error = $1 WHERE id = $2`, [sendRes.error || 'Bulk retrigger failed', id])
       }
     } else if (action === 'delete') {
       await client.query(`DELETE FROM waitlist_entries WHERE id = $1`, [id])
     }
+
+    // Pacing delay (600ms per email to stay under Resend free tier rate limits)
+    await new Promise(r => setTimeout(r, 600))
   }
 
   return c.redirect('/admin?msg=bulk_success')
+})
+
+// ── Process Failed Queue Handler ──
+admin.post('/retry-failed-queue', async (c) => {
+  const { env } = c
+  const client = await getDb(c).connect()
+  const res = await client.query(`SELECT id, email, name, position FROM waitlist_entries WHERE email_sent = 0 OR last_email_error IS NOT NULL`)
+  const failedList = res.rows || []
+
+  let successCount = 0
+  for (const entry of failedList) {
+    const sendRes = await sendWaitlistEmail(env, entry.email, entry.name, entry.position)
+    if (sendRes.ok) {
+      await client.query(`UPDATE waitlist_entries SET email_sent = 1, last_email_error = NULL WHERE id = $1`, [entry.id])
+      successCount++
+    } else {
+      await client.query(`UPDATE waitlist_entries SET last_email_error = $1 WHERE id = $2`, [sendRes.error || 'Failed retry', entry.id])
+    }
+    await new Promise(r => setTimeout(r, 600))
+  }
+
+  return c.redirect(`/admin?msg=queue_processed&cnt=${successCount}`)
+})
+
+// ── Send Weekly Digest Handler ──
+admin.post('/send-weekly-digest', async (c) => {
+  const { env } = c
+  const res = await sendWeeklyDigestEmail(env, c)
+  if (res.ok) {
+    return c.redirect('/admin?msg=digest_success')
+  }
+  return c.redirect('/admin?msg=digest_failed')
 })
 
 // ── Add VIP Lead Form Handler ──
@@ -1017,8 +1132,12 @@ admin.post('/add-lead', async (c) => {
       [name, email, role, company || null, github || null, nextPos]
     )
 
-    await sendWaitlistEmail(env, email, name, nextPos)
-    await client.query(`UPDATE waitlist_entries SET email_sent = 1 WHERE email = $1`, [email])
+    const sendRes = await sendWaitlistEmail(env, email, name, nextPos)
+    if (sendRes.ok) {
+      await client.query(`UPDATE waitlist_entries SET email_sent = 1, last_email_error = NULL WHERE email = $1`, [email])
+    } else {
+      await client.query(`UPDATE waitlist_entries SET email_sent = 0, last_email_error = $1 WHERE email = $2`, [sendRes.error || 'Add lead email failed', email])
+    }
   }
 
   return c.redirect('/admin?msg=add_lead_success')
@@ -1142,10 +1261,12 @@ admin.post('/retrigger', async (c) => {
   const entry = res.rows[0] as { name: string; position: number } | undefined
 
   if (entry) {
-    const success = await sendWaitlistEmail(env, email, entry.name, entry.position)
-    if (success) {
-      await client.query(`UPDATE waitlist_entries SET email_sent = 1 WHERE email = $1`, [email])
+    const sendRes = await sendWaitlistEmail(env, email, entry.name, entry.position)
+    if (sendRes.ok) {
+      await client.query(`UPDATE waitlist_entries SET email_sent = 1, last_email_error = NULL WHERE email = $1`, [email])
       return c.redirect('/admin?msg=retrigger_success')
+    } else {
+      await client.query(`UPDATE waitlist_entries SET email_sent = 0, last_email_error = $1 WHERE email = $2`, [sendRes.error || 'Retrigger email failed', email])
     }
   }
 

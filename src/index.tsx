@@ -383,18 +383,36 @@ app.post('/api/join', async (c) => {
 
   // ── Dispatch Follow-up Email ──
   let emailSent = 0
+  let lastEmailErr: string | null = null
   const resendKey = env?.RESEND_API_KEY || (typeof process !== 'undefined' ? process.env?.RESEND_API_KEY : undefined)
   if (resendKey) {
-    const success = await sendWaitlistEmail(env, email, name, nextPosition)
-    if (success) emailSent = 1
+    const res = await sendWaitlistEmail(env, email, name, nextPosition)
+    if (res.ok) {
+      emailSent = 1
+    } else {
+      lastEmailErr = res.error || 'Failed sending email'
+    }
     try {
       await sendAdminNotificationEmail(env, name, email, role, company, github, BASE_COUNT + nextPosition)
     } catch (e) {
       console.error('Failed sending admin notification email:', e)
     }
+  } else {
+    lastEmailErr = 'Missing RESEND_API_KEY environment variable'
   }
 
-  await getSql(c)`UPDATE waitlist_entries SET email_sent = ${emailSent} WHERE email = ${email}`
+  await getSql(c)`UPDATE waitlist_entries SET email_sent = ${emailSent}, last_email_error = ${lastEmailErr} WHERE email = ${email}`
+
+  // ── Daily 10-Signup Target Milestone Check ──
+  try {
+    const { rows: todayRows } = await getSql(c)`SELECT COUNT(*) as cnt FROM waitlist_entries WHERE created_at::DATE = CURRENT_DATE`
+    const todayCount = Number(todayRows[0]?.cnt ?? 0)
+    if (todayCount >= 10) {
+      await checkAndSendDailyMilestoneEmail(env, c, todayCount)
+    }
+  } catch (err) {
+    console.error('Failed daily milestone check:', err)
+  }
 
   return c.json({
     success: true,
@@ -403,12 +421,61 @@ app.post('/api/join', async (c) => {
   })
 })
 
-export async function sendWaitlistEmail(env: any, email: string, name: string, nextPosition: number): Promise<boolean> {
-  const apiKey = env.RESEND_API_KEY || process.env.RESEND_API_KEY;
-  if (!apiKey) return false;
-  try {
-    const positionStr = (BASE_COUNT + nextPosition).toLocaleString()
-    const emailHtml = `<!DOCTYPE html>
+export async function sendResendWithRetry(
+  env: any,
+  payload: { from: string; to: string[]; subject: string; html: string }
+): Promise<{ ok: boolean; error?: string }> {
+  const apiKey = env.RESEND_API_KEY || (typeof process !== 'undefined' ? process.env?.RESEND_API_KEY : undefined);
+  if (!apiKey) return { ok: false, error: 'Missing RESEND_API_KEY' };
+
+  let attempts = 0;
+  const maxAttempts = 3;
+  let lastError = '';
+
+  while (attempts < maxAttempts) {
+    attempts++;
+    try {
+      const res = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      });
+
+      if (res.ok) {
+        return { ok: true };
+      }
+
+      const status = res.status;
+      const errorText = await res.text();
+      lastError = `HTTP ${status}: ${errorText.slice(0, 150)}`;
+
+      if (status === 429 || status >= 500) {
+        const backoffMs = attempts * 1000;
+        await new Promise((r) => setTimeout(r, backoffMs));
+        continue;
+      } else {
+        break;
+      }
+    } catch (err: any) {
+      lastError = err?.message || 'Network fetch error';
+      await new Promise((r) => setTimeout(r, 1000));
+    }
+  }
+
+  return { ok: false, error: lastError };
+}
+
+export async function sendWaitlistEmail(
+  env: any,
+  email: string,
+  name: string,
+  nextPosition: number
+): Promise<{ ok: boolean; error?: string }> {
+  const positionStr = (BASE_COUNT + nextPosition).toLocaleString()
+  const emailHtml = `<!DOCTYPE html>
 <html>
 <head>
 <meta charset="utf-8" />
@@ -581,28 +648,13 @@ export async function sendWaitlistEmail(env: any, email: string, name: string, n
 
 </body>
 </html>`
-    const res = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        from: 'Codeward <waitlist@codeward.cloud>',
-        to: [email],
-        subject: 'You are on the Codeward waitlist',
-        html: emailHtml
-      })
-    })
-    if (!res.ok) {
-      const errorText = await res.text()
-      console.error('Resend API Error:', res.status, errorText)
-    }
-    return res.ok
-  } catch (err) {
-    console.error('Failed to send email', err)
-    return false
-  }
+
+  return sendResendWithRetry(env, {
+    from: 'Codeward <waitlist@codeward.cloud>',
+    to: [email],
+    subject: 'You are on the Codeward waitlist',
+    html: emailHtml
+  })
 }
 
 export async function sendAdminNotificationEmail(
@@ -614,40 +666,231 @@ export async function sendAdminNotificationEmail(
   github: string,
   position: number
 ): Promise<boolean> {
-  const apiKey = env.RESEND_API_KEY || process.env.RESEND_API_KEY;
-  if (!apiKey) return false;
+  const res = await sendResendWithRetry(env, {
+    from: 'Codeward System <waitlist@codeward.cloud>',
+    to: ['kelvin.reallife8@gmail.com'],
+    subject: `New Waitlist Sign-up: ${name}`,
+    html: `
+      <h3>New Waitlist Sign-up Details</h3>
+      <p><strong>Name:</strong> ${escapeHtml(name)}</p>
+      <p><strong>Email:</strong> ${escapeHtml(email)}</p>
+      <p><strong>Role:</strong> ${escapeHtml(role)}</p>
+      <p><strong>Company:</strong> ${escapeHtml(company || 'None')}</p>
+      <p><strong>GitHub:</strong> ${escapeHtml(github || 'None')}</p>
+      <p><strong>Position:</strong> #${position}</p>
+    `
+  })
+  return res.ok
+}
+
+// ── Daily 10-Signup Target Milestone Alert ──
+export async function checkAndSendDailyMilestoneEmail(env: any, c: any, todayCount: number): Promise<boolean> {
+  const sql = getSql(c);
   try {
-    const res = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        from: 'Codeward System <waitlist@codeward.cloud>',
-        to: ['kelvin.reallife8@gmail.com'],
-        subject: `New Waitlist Sign-up: ${name}`,
-        html: `
-          <h3>New Waitlist Sign-up Details</h3>
-          <p><strong>Name:</strong> ${escapeHtml(name)}</p>
-          <p><strong>Email:</strong> ${escapeHtml(email)}</p>
-          <p><strong>Role:</strong> ${escapeHtml(role)}</p>
-          <p><strong>Company:</strong> ${escapeHtml(company || 'None')}</p>
-          <p><strong>GitHub:</strong> ${escapeHtml(github || 'None')}</p>
-          <p><strong>Position:</strong> #${position}</p>
-        `
-      })
-    })
-    if (!res.ok) {
-      const errorText = await res.text()
-      console.error('Resend API Error (Admin Notification):', res.status, errorText)
+    const todayStr = new Date().toISOString().split('T')[0];
+    const { rows: milestoneRows } = await sql`SELECT milestone_10_sent FROM daily_milestones WHERE day = ${todayStr}`;
+    if (milestoneRows.length > 0 && milestoneRows[0].milestone_10_sent === 1) {
+      return false; // Already sent today
     }
-    return res.ok
+
+    const { rows: todayEntries } = await sql`
+      SELECT name, email, role, company, github, created_at
+      FROM waitlist_entries
+      WHERE created_at::DATE = CURRENT_DATE
+      ORDER BY created_at ASC
+    `;
+
+    let corpCount = 0;
+    const freeMailSet = new Set(['gmail.com', 'yahoo.com', 'hotmail.com', 'outlook.com', 'icloud.com', 'proton.me', 'protonmail.com']);
+    todayEntries.forEach((e: any) => {
+      const domain = (e.email.split('@')[1] || '').toLowerCase();
+      if (domain && !freeMailSet.has(domain)) corpCount++;
+    });
+
+    const entriesListHtml = todayEntries.map((e: any, idx: number) => `
+      <tr style="border-bottom: 1px solid #22232a;">
+        <td style="padding: 10px; color: #7c6fff; font-weight: 600;">#${idx + 1}</td>
+        <td style="padding: 10px; color: #ffffff;"><strong>${escapeHtml(e.name)}</strong><br/><span style="color:#8b8d98;font-size:12px;">${escapeHtml(e.email)}</span></td>
+        <td style="padding: 10px; color: #c9d1d9;">${escapeHtml(e.role)}</td>
+        <td style="padding: 10px; color: #22c55e;">${e.company ? escapeHtml(e.company) : '<span style="color:#5f6169;">—</span>'}</td>
+      </tr>
+    `).join('');
+
+    const milestoneHtml = `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"/><meta name="color-scheme" content="dark"></head>
+<body style="margin:0;padding:32px 16px;background:#000000;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,sans-serif;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;margin:0 auto;background:#0d1117;border:1px solid #22232a;border-radius:12px;overflow:hidden;">
+  <tr>
+    <td style="padding:32px 24px;background:linear-gradient(135deg, rgba(34,197,94,0.15), rgba(124,111,255,0.15));text-align:center;">
+      <h1 style="color:#ffffff;font-size:24px;margin:0 0 8px;">🎯 Target Achieved! 10+ Daily Signups!</h1>
+      <p style="color:#c9d1d9;font-size:15px;margin:0;">Congratulations Kelvin! Codeward hit <strong>${todayCount} signups</strong> today!</p>
+    </td>
+  </tr>
+  <tr>
+    <td style="padding:24px;">
+      <div style="display:flex;gap:16px;margin-bottom:24px;">
+        <div style="flex:1;background:#161b22;padding:16px;border-radius:8px;border:1px solid #21262d;text-align:center;">
+          <div style="font-size:24px;font-weight:700;color:#22c55e;">${todayCount}</div>
+          <div style="font-size:12px;color:#8b8d98;text-transform:uppercase;">Today's Signups</div>
+        </div>
+        <div style="flex:1;background:#161b22;padding:16px;border-radius:8px;border:1px solid #21262d;text-align:center;">
+          <div style="font-size:24px;font-weight:700;color:#3b82f6;">${corpCount}</div>
+          <div style="font-size:12px;color:#8b8d98;text-transform:uppercase;">Corporate Leads</div>
+        </div>
+      </div>
+      <h3 style="color:#ffffff;font-size:16px;margin-bottom:12px;">Today's Leads Breakdown</h3>
+      <table width="100%" style="border-collapse:collapse;font-size:13px;background:#161b22;border-radius:8px;overflow:hidden;">
+        <thead>
+          <tr style="background:#21262d;color:#8b8d98;text-transform:uppercase;font-size:11px;">
+            <th style="padding:10px;text-align:left;">#</th>
+            <th style="padding:10px;text-align:left;">Lead</th>
+            <th style="padding:10px;text-align:left;">Role</th>
+            <th style="padding:10px;text-align:left;">Company</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${entriesListHtml}
+        </tbody>
+      </table>
+    </td>
+  </tr>
+</table>
+</body>
+</html>`;
+
+    const res = await sendResendWithRetry(env, {
+      from: 'Codeward System <waitlist@codeward.cloud>',
+      to: ['kelvin.reallife8@gmail.com'],
+      subject: `🎯 Target Achieved! ${todayCount} Signups Today on Codeward!`,
+      html: milestoneHtml
+    });
+
+    if (res.ok) {
+      await sql`
+        INSERT INTO daily_milestones (day, milestone_10_sent)
+        VALUES (${todayStr}, 1)
+        ON CONFLICT (day) DO UPDATE SET milestone_10_sent = 1
+      `;
+      return true;
+    }
   } catch (err) {
-    console.error('Failed to send admin email', err)
-    return false
+    console.error('Failed sending daily milestone email:', err);
+  }
+  return false;
+}
+
+// ── Weekly Digest Report Email Generator ──
+export async function sendWeeklyDigestEmail(env: any, c: any): Promise<{ ok: boolean; error?: string }> {
+  const sql = getSql(c);
+  try {
+    const { rows: totalRows } = await sql`SELECT COUNT(*) as cnt FROM waitlist_entries`;
+    const totalAllTime = Number(totalRows[0]?.cnt ?? 0);
+
+    const { rows: thisWeekRows } = await sql`
+      SELECT COUNT(*) as cnt FROM waitlist_entries
+      WHERE created_at >= CURRENT_DATE - INTERVAL '7 days'
+    `;
+    const thisWeekCount = Number(thisWeekRows[0]?.cnt ?? 0);
+
+    const { rows: prevWeekRows } = await sql`
+      SELECT COUNT(*) as cnt FROM waitlist_entries
+      WHERE created_at >= CURRENT_DATE - INTERVAL '14 days'
+        AND created_at < CURRENT_DATE - INTERVAL '7 days'
+    `;
+    const prevWeekCount = Number(prevWeekRows[0]?.cnt ?? 0);
+
+    let growthText = '0%';
+    if (prevWeekCount === 0) {
+      growthText = thisWeekCount > 0 ? '+100%' : '0%';
+    } else {
+      const pct = Math.round(((thisWeekCount - prevWeekCount) / prevWeekCount) * 100);
+      growthText = (pct >= 0 ? `+${pct}%` : `${pct}%`);
+    }
+
+    const { rows: topLeads } = await sql`
+      SELECT name, email, role, company, github, created_at
+      FROM waitlist_entries
+      WHERE created_at >= CURRENT_DATE - INTERVAL '7 days'
+      ORDER BY created_at DESC
+      LIMIT 10
+    `;
+
+    const topLeadsHtml = topLeads.map((e: any) => `
+      <tr style="border-bottom: 1px solid #22232a;">
+        <td style="padding: 10px; color: #ffffff;"><strong>${escapeHtml(e.name)}</strong><br/><span style="color:#8b8d98;font-size:12px;">${escapeHtml(e.email)}</span></td>
+        <td style="padding: 10px; color: #c9d1d9;">${escapeHtml(e.role)}</td>
+        <td style="padding: 10px; color: #22c55e;">${e.company ? escapeHtml(e.company) : '<span style="color:#5f6169;">—</span>'}</td>
+      </tr>
+    `).join('');
+
+    const digestHtml = `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"/><meta name="color-scheme" content="dark"></head>
+<body style="margin:0;padding:32px 16px;background:#000000;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,sans-serif;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;margin:0 auto;background:#0d1117;border:1px solid #22232a;border-radius:12px;overflow:hidden;">
+  <tr>
+    <td style="padding:32px 24px;background:#161b22;border-bottom:1px solid #22232a;">
+      <h1 style="color:#ffffff;font-size:22px;margin:0 0 6px;">📊 Codeward Weekly Digest</h1>
+      <p style="color:#8b8d98;font-size:14px;margin:0;">Weekly performance report & lead breakdown</p>
+    </td>
+  </tr>
+  <tr>
+    <td style="padding:24px;">
+      <div style="display:flex;gap:12px;margin-bottom:24px;">
+        <div style="flex:1;background:#161b22;padding:16px;border-radius:8px;border:1px solid #21262d;text-align:center;">
+          <div style="font-size:22px;font-weight:700;color:#22c55e;">${thisWeekCount}</div>
+          <div style="font-size:11px;color:#8b8d98;text-transform:uppercase;">Past 7 Days</div>
+          <div style="font-size:11px;color:#4ade80;margin-top:4px;">${growthText} WoW</div>
+        </div>
+        <div style="flex:1;background:#161b22;padding:16px;border-radius:8px;border:1px solid #21262d;text-align:center;">
+          <div style="font-size:22px;font-weight:700;color:#3b82f6;">${totalAllTime}</div>
+          <div style="font-size:11px;color:#8b8d98;text-transform:uppercase;">Total Waitlist</div>
+        </div>
+        <div style="flex:1;background:#161b22;padding:16px;border-radius:8px;border:1px solid #21262d;text-align:center;">
+          <div style="font-size:22px;font-weight:700;color:#a855f7;">${(thisWeekCount / 7).toFixed(1)}</div>
+          <div style="font-size:11px;color:#8b8d98;text-transform:uppercase;">Avg / Day</div>
+        </div>
+      </div>
+
+      <h3 style="color:#ffffff;font-size:15px;margin-bottom:12px;">Recent Leads This Week</h3>
+      <table width="100%" style="border-collapse:collapse;font-size:13px;background:#161b22;border-radius:8px;overflow:hidden;">
+        <thead>
+          <tr style="background:#21262d;color:#8b8d98;text-transform:uppercase;font-size:11px;">
+            <th style="padding:10px;text-align:left;">Name / Email</th>
+            <th style="padding:10px;text-align:left;">Role</th>
+            <th style="padding:10px;text-align:left;">Company</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${topLeadsHtml || '<tr><td colspan="3" style="padding:16px;text-align:center;color:#5f6169;">No signups recorded this week.</td></tr>'}
+        </tbody>
+      </table>
+    </td>
+  </tr>
+</table>
+</body>
+</html>`;
+
+    return sendResendWithRetry(env, {
+      from: 'Codeward Digest <waitlist@codeward.cloud>',
+      to: ['kelvin.reallife8@gmail.com'],
+      subject: `📊 Codeward Weekly Digest (${thisWeekCount} new signups, ${growthText} WoW)`,
+      html: digestHtml
+    });
+  } catch (err: any) {
+    return { ok: false, error: err?.message || 'Failed generating weekly digest' };
   }
 }
+
+// ── Cron Route for Weekly Digest ──
+app.get('/api/cron/weekly-digest', async (c) => {
+  const res = await sendWeeklyDigestEmail(c.env, c);
+  if (res.ok) {
+    return c.json({ success: true, message: 'Weekly digest email dispatched!' });
+  }
+  return c.json({ error: res.error || 'Failed sending weekly digest' }, 500);
+});
 
 
 
