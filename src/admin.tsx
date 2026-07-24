@@ -396,10 +396,45 @@ admin.get('/', async (c) => {
   const emailsFailed = Number(emailStatsRes.rows[0]?.failed ?? 0)
   const totalInvited = Number(emailStatsRes.rows[0]?.invited ?? 0)
 
+  // ── Daily Signups & Growth Analytics ──
   const todayRes = await client.query(
     `SELECT COUNT(*) as cnt FROM waitlist_entries WHERE created_at::DATE = CURRENT_DATE`
   )
   const todayCount = Number(todayRes.rows[0]?.cnt ?? 0)
+
+  const yesterdayRes = await client.query(
+    `SELECT COUNT(*) as cnt FROM waitlist_entries WHERE created_at::DATE = CURRENT_DATE - INTERVAL '1 day'`
+  )
+  const yesterdayCount = Number(yesterdayRes.rows[0]?.cnt ?? 0)
+
+  let growthBadgeHtml = '';
+  if (yesterdayCount === 0) {
+    if (todayCount > 0) {
+      growthBadgeHtml = `<span class="growth-badge positive">↑ +100% vs yesterday</span>`;
+    } else {
+      growthBadgeHtml = `<span class="growth-badge neutral">0% vs yesterday</span>`;
+    }
+  } else {
+    const diffPct = Math.round(((todayCount - yesterdayCount) / yesterdayCount) * 100);
+    if (diffPct > 0) {
+      growthBadgeHtml = `<span class="growth-badge positive">↑ +${diffPct}% vs yesterday</span>`;
+    } else if (diffPct < 0) {
+      growthBadgeHtml = `<span class="growth-badge negative">↓ ${diffPct}% vs yesterday</span>`;
+    } else {
+      growthBadgeHtml = `<span class="growth-badge neutral">0% vs yesterday</span>`;
+    }
+  }
+
+  const last7Res = await client.query(
+    `SELECT COUNT(*) as cnt FROM waitlist_entries WHERE created_at >= CURRENT_DATE - INTERVAL '7 days'`
+  )
+  const last7Count = Number(last7Res.rows[0]?.cnt ?? 0)
+
+  const last30Res = await client.query(
+    `SELECT COUNT(*) as cnt FROM waitlist_entries WHERE created_at >= CURRENT_DATE - INTERVAL '30 days'`
+  )
+  const last30Count = Number(last30Res.rows[0]?.cnt ?? 0)
+  const avgDaily30 = (last30Count / 30).toFixed(1);
 
   const roleBreakdownRes = await client.query(
     `SELECT role, COUNT(*) as cnt FROM waitlist_entries GROUP BY role ORDER BY cnt DESC`
@@ -430,28 +465,77 @@ admin.get('/', async (c) => {
     .sort((a, b) => b[1] - a[1])
     .slice(0, 5);
 
-  // Daily Signups Bar Graph (Last 10 Days)
+  // Timeframe selector for Daily Graph (default 14 days)
+  const daysLimitParam = parseInt(url.searchParams.get('days') || '14', 10);
+  const daysLimit = [7, 14, 30, 60].includes(daysLimitParam) ? daysLimitParam : 14;
+
   const dailyGraphRes = await client.query(
-    `SELECT DATE(created_at) as day, COUNT(*) as cnt
+    `SELECT DATE(created_at) as day, COUNT(*) as cnt,
+            SUM(CASE WHEN company IS NOT NULL AND company != '' THEN 1 ELSE 0 END) as corp_cnt
      FROM waitlist_entries
      GROUP BY DATE(created_at)
      ORDER BY day DESC
-     LIMIT 10`
+     LIMIT $1`, [daysLimit]
   );
   const dailyRows = (dailyGraphRes.rows || []).reverse();
   const maxDaily = Math.max(1, ...dailyRows.map((r: any) => Number(r.cnt)));
 
+  let peakDayStr = 'N/A';
+  let peakDayCnt = 0;
+  dailyRows.forEach((r: any) => {
+    const cnt = Number(r.cnt);
+    if (cnt > peakDayCnt) {
+      peakDayCnt = cnt;
+      peakDayStr = new Date(r.day).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    }
+  });
+
+  const todayStr = new Date().toISOString().split('T')[0];
+
   const chartBarsHtml = dailyRows.map((r: any) => {
     const cnt = Number(r.cnt);
+    const corpCnt = Number(r.corp_cnt || 0);
     const heightPct = Math.round((cnt / maxDaily) * 100);
-    const dateLabel = new Date(r.day).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    const dateObj = new Date(r.day);
+    const dateLabel = dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    const isToday = dateObj.toISOString().split('T')[0] === todayStr;
+
     return `
-      <div class="chart-bar-col">
+      <div class="chart-bar-col" title="${dateLabel}: ${cnt} total (${corpCnt} corporate)">
         <div class="chart-bar-track">
           <span class="chart-bar-value">${cnt}</span>
-          <div class="chart-bar-fill" style="height: ${Math.max(15, heightPct)}%;"></div>
+          <div class="chart-bar-fill ${isToday ? 'today-bar' : ''}" style="height: ${Math.max(14, heightPct)}%;"></div>
         </div>
-        <span class="chart-bar-label">${dateLabel}</span>
+        <span class="chart-bar-label" style="${isToday ? 'color:#f59e0b;font-weight:700;' : ''}">${dateLabel}</span>
+      </div>
+    `;
+  }).join('');
+
+  // Day of Week Distribution (Weekly Patterns)
+  const dowRes = await client.query(
+    `SELECT EXTRACT(DOW FROM created_at) as dow, COUNT(*) as cnt
+     FROM waitlist_entries
+     GROUP BY dow
+     ORDER BY dow`
+  );
+  const dowMap: Record<number, number> = { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0 };
+  (dowRes.rows || []).forEach((r: any) => {
+    dowMap[Math.floor(Number(r.dow))] = Number(r.cnt);
+  });
+
+  const maxDowCnt = Math.max(1, ...Object.values(dowMap));
+  const DOW_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const dowOrder = [1, 2, 3, 4, 5, 6, 0]; // Mon to Sun
+  const dowCardsHtml = dowOrder.map((dowIdx) => {
+    const cnt = dowMap[dowIdx] || 0;
+    const pct = Math.round((cnt / maxDowCnt) * 100);
+    return `
+      <div class="dow-card">
+        <span class="dow-name">${DOW_LABELS[dowIdx]}</span>
+        <span class="dow-count">${cnt}</span>
+        <div class="dow-bar-track">
+          <div class="dow-bar-fill" style="width: ${pct}%;"></div>
+        </div>
       </div>
     `;
   }).join('');
@@ -602,31 +686,60 @@ admin.get('/', async (c) => {
 
   ${alertHtml}
 
-  <section class="stats-row">
+  <section class="stats-row" style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));">
     <div class="stat-card">
-      <span class="stat-num">${allTotal.toLocaleString()}</span>
+      <div style="display:flex;align-items:center;justify-content:space-between;">
+        <span class="stat-num">${allTotal.toLocaleString()}</span>
+      </div>
       <span class="stat-label">total signups</span>
     </div>
     <div class="stat-card">
-      <span class="stat-num accent">+${todayCount.toLocaleString()}</span>
+      <div style="display:flex;align-items:center;justify-content:space-between;">
+        <span class="stat-num accent">+${todayCount.toLocaleString()}</span>
+        ${growthBadgeHtml}
+      </div>
       <span class="stat-label">joined today</span>
     </div>
     <div class="stat-card">
-      <span class="stat-num" style="color:#3b82f6;">${totalInvited.toLocaleString()}</span>
-      <span class="stat-label">invited to beta</span>
+      <span class="stat-num" style="color:#a855f7;">${last7Count.toLocaleString()}</span>
+      <span class="stat-label">last 7 days</span>
     </div>
     <div class="stat-card">
-      <span class="stat-num" style="color:#10b981;">${emailsSent.toLocaleString()}</span>
-      <span class="stat-label">emails sent</span>
+      <span class="stat-num" style="color:#3b82f6;">${last30Count.toLocaleString()} <span style="font-size:12px;color:var(--muted);font-weight:400;">(${avgDaily30}/day)</span></span>
+      <span class="stat-label">last 30 days</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-num" style="color:#f59e0b;">${peakDayCnt}</span>
+      <span class="stat-label">peak day (${peakDayStr})</span>
     </div>
   </section>
 
   <!-- ── ANALYTICS GRID ── -->
   <div class="analytics-grid">
-    <section class="panel chart-card">
-      <h2 class="panel-title">Daily Signup Trend (Last 10 Days)</h2>
+    <section class="panel chart-card" style="grid-column: span 2;">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:12px;">
+        <h2 class="panel-title" style="margin:0;">Daily Signups & Velocity</h2>
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+          <div class="timeframe-picker">
+            <a href="${qs({ days: 7 })}" class="timeframe-btn ${daysLimit === 7 ? 'active' : ''}">7D</a>
+            <a href="${qs({ days: 14 })}" class="timeframe-btn ${daysLimit === 14 ? 'active' : ''}">14D</a>
+            <a href="${qs({ days: 30 })}" class="timeframe-btn ${daysLimit === 30 ? 'active' : ''}">30D</a>
+            <a href="${qs({ days: 60 })}" class="timeframe-btn ${daysLimit === 60 ? 'active' : ''}">60D</a>
+          </div>
+          <a href="/admin/export-daily-csv" class="action-btn" style="text-decoration:none;">
+            📥 Export Daily CSV
+          </a>
+        </div>
+      </div>
+
       <div class="chart-container">
         ${chartBarsHtml || '<p class="muted">No recent signups.</p>'}
+      </div>
+
+      <div class="chart-legend">
+        <div class="legend-item"><div class="legend-dot regular"></div> Daily Signups</div>
+        <div class="legend-item"><div class="legend-dot today"></div> Today's Signups</div>
+        <div style="margin-left:auto;font-size:11px;color:var(--muted);">Showing last ${daysLimit} days</div>
       </div>
     </section>
 
@@ -642,6 +755,14 @@ admin.get('/', async (c) => {
           `).join('')
           : '<p class="muted" style="font-size:13px;">No corporate domains yet.</p>'
         }
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2 class="panel-title">Day-of-Week Pattern (Mon–Sun)</h2>
+      <p style="font-size:12px;color:var(--muted);margin-bottom:8px;">Signup velocity across days of the week:</p>
+      <div class="dow-grid">
+        ${dowCardsHtml}
       </div>
     </section>
   </div>
@@ -969,6 +1090,41 @@ admin.get('/export.csv', async (c) => {
     headers: {
       'Content-Type': 'text/csv; charset=utf-8',
       'Content-Disposition': `attachment; filename="codeward-waitlist-${new Date().toISOString().slice(0, 10)}.csv"`,
+    },
+  })
+})
+
+// ── Daily Signups CSV Export ──
+admin.get('/export-daily-csv', async (c) => {
+  const client = await getDb(c).connect()
+  const res = await client.query(
+    `SELECT DATE(created_at) as date,
+            COUNT(*) as total_signups,
+            SUM(CASE WHEN company IS NOT NULL AND company != '' THEN 1 ELSE 0 END) as corporate_signups,
+            SUM(CASE WHEN COALESCE(status, 'pending') = 'invited' THEN 1 ELSE 0 END) as invited_count
+     FROM waitlist_entries
+     GROUP BY DATE(created_at)
+     ORDER BY date DESC`
+  )
+
+  const header = ['Date', 'Total Signups', 'Corporate Signups', 'Invited Count']
+  const lines = [header.join(',')]
+  for (const r of res.rows || []) {
+    const d = r.date ? new Date(r.date).toISOString().split('T')[0] : ''
+    lines.push(
+      [
+        escapeCsv(d),
+        r.total_signups || 0,
+        r.corporate_signups || 0,
+        r.invited_count || 0,
+      ].join(',')
+    )
+  }
+  const csv = lines.join('\n')
+  return new Response(csv, {
+    headers: {
+      'Content-Type': 'text/csv; charset=utf-8',
+      'Content-Disposition': `attachment; filename="codeward-daily-signups-${new Date().toISOString().slice(0, 10)}.csv"`,
     },
   })
 })

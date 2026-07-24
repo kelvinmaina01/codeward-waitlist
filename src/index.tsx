@@ -248,7 +248,7 @@ app.get('/terms', (c) => {
 
     <div class="legal-section">
       <h2>5. Contact Us</h2>
-      <p>If you have any questions regarding these terms or your personal data, please reach out to us at <a href="mailto:support@codeward.ai" style="color: var(--brand-green); text-decoration: underline;">support@codeward.ai</a>.</p>
+      <p>If you have any questions regarding these terms or your personal data, please reach out to us at <a href="mailto:support@codeward.cloud" style="color: var(--brand-green); text-decoration: underline;">support@codeward.cloud</a>.</p>
     </div>
 
     <div class="legal-footer">
